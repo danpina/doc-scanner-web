@@ -163,6 +163,12 @@ main.app-main {
   font-size: 1.1rem;
 }
 
+.confirm-armed {
+  background: #d3352d !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
 .empty-state {
   text-align: center;
   color: #8a8a8e;
