@@ -217,9 +217,11 @@ document.getElementById('applyAllFilterBtn').addEventListener('click', () => {
 });
 
 cancelBtn.addEventListener('click', () => {
-  if (pages.length === 0 || confirm('Discard this scan?')) {
-    window.location.href = 'index.html';
-  }
+  // Nothing to lose yet — skip the confirm step armConfirm would otherwise arm.
+  if (pages.length === 0) window.location.href = 'index.html';
+});
+armConfirm(cancelBtn, 'Discard?', () => {
+  window.location.href = 'index.html';
 });
 
 // --- Editor (crop + filter) ---

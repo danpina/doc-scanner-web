@@ -68,8 +68,7 @@ function createScanItem(scan) {
   const deleteBtn = document.createElement('button');
   deleteBtn.textContent = '🗑';
   deleteBtn.title = 'Delete';
-  deleteBtn.addEventListener('click', async () => {
-    if (!confirm(`Delete "${scan.title}"?`)) return;
+  armConfirm(deleteBtn, 'Sure?', async () => {
     await authedFetch(`/api/scans/${scan.id}`, { method: 'DELETE' });
     loadScans();
   });
