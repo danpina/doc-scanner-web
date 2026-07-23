@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>New Scan — Doc Scanner</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>New Scan</h1>
+    <div class="user-bar" id="userBar"></div>
+  </header>
+
+  <main class="app-main">
+    <div class="capture-bar">
+      <label for="cameraInput">📷 Take Photo</label>
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden" />
+      <label for="galleryInput" class="secondary">🖼️ Choose Photos</label>
+      <input type="file" id="galleryInput" accept="image/*" multiple class="hidden" />
+    </div>
+
+    <div class="page-grid" id="pageGrid"></div>
+    <p class="empty-state hidden" id="noPages">Take or choose a photo to start this scan.</p>
+  </main>
+
+  <div class="bottom-bar">
+    <button class="secondary" id="cancelBtn">Cancel</button>
+    <button class="primary" id="exportBtn" disabled>Export PDF</button>
+  </div>
+
+  <!-- Crop / filter editor -->
+  <div class="editor-overlay hidden" id="editorOverlay">
+    <div class="editor-topbar">
+      <button id="editorCancel">Cancel</button>
+      <span>Adjust page</span>
+      <button id="editorDone">Done</button>
+    </div>
+    <div class="editor-canvas-wrap" id="editorCanvasWrap">
+      <canvas id="editorCanvas"></canvas>
+    </div>
+    <div class="editor-toolbar">
+      <button data-filter="original" class="filter-btn active">Original</button>
+      <button data-filter="grayscale" class="filter-btn">Grayscale</button>
+      <button data-filter="bw" class="filter-btn">B &amp; W</button>
+      <button id="resetCornersBtn">Reset crop</button>
+    </div>
+  </div>
+
+  <!-- Export result -->
+  <div class="editor-overlay hidden" id="exportPanel">
+    <div class="editor-topbar">
+      <button id="exportBack">Back</button>
+      <span>Export</span>
+      <span></span>
+    </div>
+    <main class="app-main" style="color: #fff; padding-top: 2rem;">
+      <label for="scanTitleInput" class="muted" style="color:#ccc;">Title</label>
+      <input type="text" id="scanTitleInput" style="width:100%; padding:0.7rem; border-radius:8px; border:none; margin:0.5rem 0 1.5rem;" />
+      <div class="capture-bar">
+        <button id="saveScanBtn">💾 Save to My Scans</button>
+        <button id="downloadScanBtn" class="secondary">⬇️ Download</button>
+      </div>
+      <div class="capture-bar">
+        <button id="shareScanBtn" class="secondary">📤 Share / Email</button>
+      </div>
+    </main>
+  </div>
+
+  <div class="spinner-overlay hidden" id="spinner">Processing…</div>
+
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="common.js"></script>
+  <script src="perspective.js"></script>
+  <script src="filters.js"></script>
+  <script src="scan.js"></script>
+</body>
+</html>

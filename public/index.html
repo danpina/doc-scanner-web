@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Doc Scanner</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>📄 Doc Scanner</h1>
+    <div class="user-bar" id="userBar"></div>
+  </header>
+
+  <main class="app-main">
+    <ul class="scan-list" id="scanList"></ul>
+    <p class="empty-state hidden" id="emptyState">No scans yet.<br />Tap the + button to scan your first document.</p>
+  </main>
+
+  <button class="fab" id="newScanBtn" title="New scan">+</button>
+
+  <script src="common.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

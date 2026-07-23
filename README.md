@@ -1,0 +1,70 @@
+# Doc Scanner (Web)
+
+Scan documents with your phone's camera, crop, filter, and export as a PDF you can share or email — no app store, no Mac required. Open it in your phone's browser.
+
+This is an independent project from the native iOS `DocScanner` app — same idea (scan → crop → filter → PDF), different stack, separate repo. It reuses the same Node/Express + Turso + Render pattern as `german-vocab-helper`.
+
+## What it does
+
+- **Capture**: "Take Photo" uses your phone's camera directly (`<input capture="environment">`); "Choose Photos" lets you pick existing images (multi-select supported).
+- **Crop**: drag the four corners of a quad over the page and flatten it — a hand-rolled perspective homography (`public/perspective.js`) does the same job as iOS's `CIFilter.perspectiveCorrection`, since Canvas 2D only supports affine transforms natively.
+- **Filter**: Original / Grayscale / Black & White per page (`public/filters.js`).
+- **Reorder / delete** pages before exporting.
+- **Export**: pages are assembled into a PDF client-side with jsPDF. From there you can Download it, Share it (uses the Web Share API to open your phone's native share sheet — Mail, WhatsApp, AirDrop, etc.), or Save it to your account so it's there next time you open the app.
+
+All image processing (crop math, filters, PDF assembly) runs in the browser — photos never leave your phone unless you tap "Save to My Scans".
+
+## Stack
+
+- **Backend**: Express (ESM), cookie/JWT auth (`auth.js`, `users.js` — same pattern as the vocab app), Turso/libsql for storage (falls back to a local SQLite file at `data/scanner.db` when `TURSO_DATABASE_URL` isn't set).
+- **Frontend**: plain HTML/CSS/JS, no build step, no framework.
+- **PDF**: [jsPDF](https://github.com/parallax/jsPDF), vendored as a static file at `public/vendor/jspdf.umd.min.js` (no CDN dependency).
+
+## Project structure
+
+```
+doc-scanner-web/
+  server.js            # Express app: page routes, auth API, scans API
+  db.js                # Turso/libsql client + schema init
+  auth.js / users.js    # login, JWT cookie sessions, user CRUD
+  scans.js              # saved scans (PDF stored as a BLOB per user)
+  create-user.js        # CLI to create your login (no public signup form)
+  public/
+    login.html/js, style.css
+    index.html / app.js       # dashboard: list, view, download, share, delete scans
+    scan.html / scan.js       # capture -> crop -> filter -> reorder -> export
+    perspective.js             # homography math (quad -> flat rectangle)
+    filters.js                 # grayscale / B&W
+    vendor/jspdf.umd.min.js
+```
+
+## Running it locally
+
+```bash
+npm install
+cp .env.example .env
+# Generate a JWT_SECRET and paste it into .env:
+node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+node create-user.js you@example.com "your-password"
+npm start
+```
+
+Then open `http://localhost:3000` — or, to test on your actual phone, find your computer's LAN IP (e.g. `192.168.1.23`) and open `http://192.168.1.23:3000` from your phone on the same Wi-Fi.
+
+There's already a test account from development: `test@example.com` / `testpass123`, stored in the local `data/scanner.db`. Feel free to delete `data/` and create your own with `create-user.js`.
+
+## Deploying (Render, same as the vocab app)
+
+1. Push this repo to GitHub.
+2. Create a free database at [turso.tech](https://turso.tech): `turso db create doc-scanner`, then grab the URL and an auth token.
+3. On Render, "New Web Service" from this repo — `render.yaml` already declares the free-tier config. Set `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, and `JWT_SECRET` in the dashboard.
+4. Run `node create-user.js you@example.com "your-password"` once, pointed at the same Turso DB (set the env vars locally and run it from your machine), to create your login.
+
+Because it's a normal HTTPS website, your phone's camera (`getUserMedia`/`capture` attribute) and the Web Share API both work once it's deployed — no app store, no TestFlight, no Mac.
+
+## Known limitations / next steps
+
+- No EXIF orientation correction — relies on the browser's default handling of rotated photos, which is fine on current mobile Safari/Chrome but could misbehave on older browsers.
+- Perspective warp runs synchronously on the main thread; very large photos (rare, since captures are downscaled to 1600px on the long edge) could cause a brief UI pause.
+- PDF pages are laid out on A4; no page-size option yet.
+- No public signup — accounts are created via `create-user.js`, matching the vocab app's admin-only user creation.
