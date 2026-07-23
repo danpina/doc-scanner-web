@@ -83,6 +83,67 @@ document.getElementById('galleryInput').addEventListener('change', (e) => {
   e.target.value = '';
 });
 
+// --- Add existing PDFs (merge their pages in alongside scanned photos) ---
+
+async function addPdfFiles(fileList) {
+  spinner.classList.remove('hidden');
+  try {
+    for (const file of fileList) {
+      const data = await file.arrayBuffer();
+      const pdf = await window.pdfjsLib.getDocument({ data }).promise;
+
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const pdfPage = await pdf.getPage(pageNum);
+        const baseViewport = pdfPage.getViewport({ scale: 1 });
+        // Render at whatever scale gets the long edge close to MAX_SOURCE_DIM,
+        // matching the resolution captured photos are downscaled to.
+        const renderScale = clamp(MAX_SOURCE_DIM / Math.max(baseViewport.width, baseViewport.height), 1, 3);
+        const viewport = pdfPage.getViewport({ scale: renderScale });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(viewport.width);
+        canvas.height = Math.round(viewport.height);
+        // PDF.js paces rendering via requestAnimationFrame, which some browsers pause
+        // for backgrounded tabs — bail out with a clear error instead of hanging forever
+        // on a page the user has switched away from.
+        await Promise.race([
+          pdfPage.render({ canvasContext: canvas.getContext('2d'), viewport }).promise,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Rendering timed out — try again with this tab in the foreground')), 20000)),
+        ]);
+
+        // Already a flat digital page (not a photo), so no inset — corners start
+        // at the exact page bounds. The user can still drag them if they want to
+        // crop it, same as any other page.
+        const page = {
+          id: newId(),
+          canvas,
+          corners: [
+            [0, 0],
+            [canvas.width, 0],
+            [canvas.width, canvas.height],
+            [0, canvas.height],
+          ],
+          filter: 'original',
+          processedCanvas: null,
+          processedDataUrl: null,
+        };
+        computeProcessed(page);
+        pages.push(page);
+      }
+    }
+    renderPages();
+  } catch (err) {
+    alert(`Could not read that PDF: ${err.message}`);
+  } finally {
+    spinner.classList.add('hidden');
+  }
+}
+
+document.getElementById('pdfInput').addEventListener('change', (e) => {
+  addPdfFiles(e.target.files);
+  e.target.value = '';
+});
+
 // --- Processing ---
 
 function computeProcessed(page) {
