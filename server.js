@@ -4,13 +4,16 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {
+  hashPassword,
   verifyPassword,
   setAuthCookie,
   clearAuthCookie,
   requireAuthApi,
   requireAuthPage,
+  requireAdminApi,
+  requireAdminPage,
 } from './auth.js';
-import { getUserByEmail } from './users.js';
+import { getUserByEmail, getAllUsers, createUser, updateUser, deleteUser } from './users.js';
 import { getScansForUser, getScanPdf, createScan, deleteScan } from './scans.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -37,6 +40,7 @@ app.get('/login.html', (req, res) => sendPage(res, 'login.html'));
 app.get('/', requireAuthPage, (req, res) => sendPage(res, 'index.html'));
 app.get('/index.html', requireAuthPage, (req, res) => sendPage(res, 'index.html'));
 app.get('/scan.html', requireAuthPage, (req, res) => sendPage(res, 'scan.html'));
+app.get('/admin.html', requireAdminPage, (req, res) => sendPage(res, 'admin.html'));
 
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 
@@ -60,7 +64,7 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/me', requireAuthApi, (req, res) => {
-  res.json({ id: req.user.id, email: req.user.email });
+  res.json({ id: req.user.id, email: req.user.email, isAdmin: req.user.isAdmin });
 });
 
 // --- Scans ---
@@ -91,6 +95,46 @@ app.get('/api/scans/:id/pdf', requireAuthApi, async (req, res) => {
 
 app.delete('/api/scans/:id', requireAuthApi, async (req, res) => {
   const deleted = await deleteScan(req.user.id, req.params.id);
+  if (!deleted) return res.status(404).json({ error: 'not found' });
+  res.status(204).end();
+});
+
+// --- Admin ---
+function toAdminUser(user) {
+  return { id: user.id, email: user.email, isAdmin: user.isAdmin, createdAt: user.createdAt };
+}
+
+app.get('/api/admin/users', requireAdminApi, async (req, res) => {
+  const users = await getAllUsers();
+  res.json(users.map(toAdminUser));
+});
+
+app.post('/api/admin/users', requireAdminApi, async (req, res) => {
+  const { email, password, isAdmin } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
+
+  const existing = await getUserByEmail(email);
+  if (existing) return res.status(409).json({ error: 'A user with that email already exists' });
+
+  const user = await createUser({ email, passwordHash: await hashPassword(password), isAdmin: !!isAdmin });
+  res.status(201).json(toAdminUser(user));
+});
+
+app.patch('/api/admin/users/:id', requireAdminApi, async (req, res) => {
+  const { email, password, isAdmin } = req.body;
+  const fields = { email, isAdmin };
+  if (password) fields.passwordHash = await hashPassword(password);
+
+  const updated = await updateUser(req.params.id, fields);
+  if (!updated) return res.status(404).json({ error: 'not found' });
+  res.json(toAdminUser(updated));
+});
+
+app.delete('/api/admin/users/:id', requireAdminApi, async (req, res) => {
+  if (req.params.id === req.user.id) {
+    return res.status(400).json({ error: "You can't delete your own account while logged in as it" });
+  }
+  const deleted = await deleteUser(req.params.id);
   if (!deleted) return res.status(404).json({ error: 'not found' });
   res.status(204).end();
 });

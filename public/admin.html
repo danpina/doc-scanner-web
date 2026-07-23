@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin — Doc Scanner</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>🛠 Admin</h1>
+    <div class="user-bar" id="userBar"></div>
+  </header>
+
+  <main class="app-main wide-main">
+    <p><a href="index.html">← Back to my scans</a></p>
+
+    <section class="admin-panel">
+      <h2>Add user</h2>
+      <form id="createForm" class="auth-form">
+        <label for="newEmail">Email</label>
+        <input type="text" id="newEmail" required />
+
+        <label for="newPassword">Password</label>
+        <input type="password" id="newPassword" required />
+
+        <label class="checkbox-label"><input type="checkbox" id="newIsAdmin" /> Admin access</label>
+
+        <button id="createBtn" type="submit">Create user</button>
+        <p id="createError" class="error hidden"></p>
+      </form>
+    </section>
+
+    <section class="admin-panel">
+      <h2>Users</h2>
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Admin</th>
+            <th>Created</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="userRows"></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="common.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

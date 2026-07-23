@@ -16,6 +16,14 @@ async function renderUserBar(containerId) {
 
   container.innerHTML = '';
 
+  const links = [];
+  if (user.isAdmin) {
+    const adminLink = document.createElement('a');
+    adminLink.href = 'admin.html';
+    adminLink.textContent = '🛠 Admin';
+    links.push(adminLink);
+  }
+
   const emailSpan = document.createElement('span');
   emailSpan.className = 'muted';
   emailSpan.textContent = user.email;
@@ -29,7 +37,7 @@ async function renderUserBar(containerId) {
     window.location.href = '/login.html';
   });
 
-  container.append(emailSpan, logoutLink);
+  container.append(...links, emailSpan, logoutLink);
   return user;
 }
 
