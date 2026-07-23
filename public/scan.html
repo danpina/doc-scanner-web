@@ -18,6 +18,8 @@
       <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden" />
       <label for="galleryInput" class="secondary">🖼️ Choose Photos</label>
       <input type="file" id="galleryInput" accept="image/*" multiple class="hidden" />
+      <label for="pdfInput" class="secondary">📑 Add PDF</label>
+      <input type="file" id="pdfInput" accept="application/pdf" multiple class="hidden" />
     </div>
 
     <div class="page-grid" id="pageGrid"></div>
@@ -70,6 +72,11 @@
   <div class="spinner-overlay hidden" id="spinner">Processing…</div>
 
   <script src="vendor/jspdf.umd.min.js"></script>
+  <script type="module">
+    import * as pdfjsLib from './vendor/pdfjs/pdf.min.mjs';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdfjs/pdf.worker.min.mjs';
+    window.pdfjsLib = pdfjsLib;
+  </script>
   <script src="common.js"></script>
   <script src="perspective.js"></script>
   <script src="filters.js"></script>

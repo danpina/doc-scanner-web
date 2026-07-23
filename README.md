@@ -7,10 +7,11 @@ This is an independent project from the native iOS `DocScanner` app — same ide
 ## What it does
 
 - **Capture**: "Take Photo" uses your phone's camera directly (`<input capture="environment">`); "Choose Photos" lets you pick existing images (multi-select supported).
+- **Add PDF**: merge pages from an existing PDF in alongside your scanned photos — each page is rendered to an image (via [pdf.js](https://mozilla.github.io/pdf.js/), vendored in `public/vendor/pdfjs/`) and dropped into the same page list, so it can be reordered, filtered, or re-cropped like any other page.
 - **Crop**: drag the four corners of a quad over the page and flatten it — a hand-rolled perspective homography (`public/perspective.js`) does the same job as iOS's `CIFilter.perspectiveCorrection`, since Canvas 2D only supports affine transforms natively.
 - **Filter**: Original / Grayscale / Black & White per page (`public/filters.js`).
 - **Reorder / delete** pages before exporting.
-- **Export**: pages are assembled into a PDF client-side with jsPDF. From there you can Download it, Share it (uses the Web Share API to open your phone's native share sheet — Mail, WhatsApp, AirDrop, etc.), or Save it to your account so it's there next time you open the app.
+- **Export**: pages are assembled into a PDF client-side with jsPDF, each page sized to match its own image's aspect ratio (no white borders). From there you can Download it, Share it (uses the Web Share API to open your phone's native share sheet — Mail, WhatsApp, AirDrop, etc.), or Save it to your account so it's there next time you open the app.
 
 All image processing (crop math, filters, PDF assembly) runs in the browser — photos never leave your phone unless you tap "Save to My Scans".
 
@@ -65,6 +66,6 @@ Because it's a normal HTTPS website, your phone's camera (`getUserMedia`/`captur
 ## Known limitations / next steps
 
 - No EXIF orientation correction — relies on the browser's default handling of rotated photos, which is fine on current mobile Safari/Chrome but could misbehave on older browsers.
-- Perspective warp runs synchronously on the main thread; very large photos (rare, since captures are downscaled to 1600px on the long edge) could cause a brief UI pause.
-- PDF pages are laid out on A4; no page-size option yet.
+- Perspective warp runs synchronously on the main thread; very large photos (rare, since captures are downscaled to 2000px on the long edge) could cause a brief UI pause.
+- Adding a PDF renders its pages via pdf.js, which paces itself with `requestAnimationFrame` — if you switch away from the tab mid-import, rendering can stall until you switch back (there's a 20s timeout per page so it fails with a clear error rather than hanging forever). Keep the tab in the foreground while a PDF is importing.
 - No public signup — accounts are created via `create-user.js`, matching the vocab app's admin-only user creation.
