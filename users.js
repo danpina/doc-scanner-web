@@ -1,5 +1,11 @@
 import { client, newId } from './db.js';
 
+// Emails are treated as case-insensitive identifiers: normalize on every write
+// and every lookup so "User@Example.com" and "user@example.com" are the same account.
+function normalizeEmail(email) {
+  return email.trim().toLowerCase();
+}
+
 function rowToUser(row) {
   return {
     id: row.id,
@@ -13,7 +19,7 @@ function rowToUser(row) {
 export async function getUserByEmail(email) {
   const result = await client.execute({
     sql: 'SELECT * FROM users WHERE email = ?',
-    args: [email],
+    args: [normalizeEmail(email)],
   });
   return result.rows[0] ? rowToUser(result.rows[0]) : null;
 }
@@ -34,7 +40,7 @@ export async function createUser({ email, passwordHash, isAdmin = false }) {
   await client.execute({
     sql: `INSERT INTO users (id, email, password_hash, is_admin, created_at)
           VALUES (?, ?, ?, ?, ?)`,
-    args: [id, email, passwordHash, isAdmin ? 1 : 0, createdAt],
+    args: [id, normalizeEmail(email), passwordHash, isAdmin ? 1 : 0, createdAt],
   });
   return getUserById(id);
 }
@@ -51,7 +57,10 @@ export async function updateUser(id, fields) {
   for (const [key, column] of Object.entries(columns)) {
     if (fields[key] === undefined) continue;
     sets.push(`${column} = ?`);
-    args.push(key === 'isAdmin' ? (fields[key] ? 1 : 0) : fields[key]);
+    let value = fields[key];
+    if (key === 'isAdmin') value = value ? 1 : 0;
+    if (key === 'email') value = normalizeEmail(value);
+    args.push(value);
   }
   if (sets.length === 0) return getUserById(id);
 
