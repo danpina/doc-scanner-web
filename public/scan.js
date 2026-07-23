@@ -1,6 +1,6 @@
 renderUserBar('userBar');
 
-const MAX_SOURCE_DIM = 1600; // downscale captured photos to keep warps/PDFs fast and small
+const MAX_SOURCE_DIM = 2000; // downscale captured photos to keep warps/PDFs fast without losing document sharpness
 const MAX_PREVIEW_DIM = 900; // editor crop UI works on a smaller preview for smooth dragging
 
 const pageGrid = document.getElementById('pageGrid');
@@ -254,10 +254,12 @@ function createHandles() {
 }
 
 function positionHandle(handle, [x, y]) {
-  const rect = editorCanvas.getBoundingClientRect();
-  const displayScale = rect.width / editorCanvas.width;
-  handle.style.left = `${rect.left + x * displayScale}px`;
-  handle.style.top = `${rect.top + y * displayScale}px`;
+  // Positioned relative to editorCanvasWrap (position: relative), via the canvas's
+  // own offset within it — NOT getBoundingClientRect, which is viewport-relative and
+  // was double-counting the topbar's height, pushing the bottom handles off-screen.
+  const displayScale = editorCanvas.offsetWidth / editorCanvas.width;
+  handle.style.left = `${editorCanvas.offsetLeft + x * displayScale}px`;
+  handle.style.top = `${editorCanvas.offsetTop + y * displayScale}px`;
 }
 
 function clamp(v, min, max) {
@@ -314,26 +316,32 @@ function defaultTitle() {
   return `Scan ${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}`;
 }
 
+const A4_LONG_EDGE_PT = 841.89; // each PDF page is sized to the photo's own aspect ratio (long edge = A4's), so the image fills it edge-to-edge instead of floating in a fixed A4 frame with white borders
+
+function pageSizeForImage(width, height) {
+  if (height >= width) {
+    const h = A4_LONG_EDGE_PT;
+    return { width: h * (width / height), height: h, orientation: 'p' };
+  }
+  const w = A4_LONG_EDGE_PT;
+  return { width: w, height: w * (height / width), orientation: 'l' };
+}
+
 exportBtn.addEventListener('click', async () => {
   if (pages.length === 0) return;
   spinner.classList.remove('hidden');
   try {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 24;
+    let doc = null;
 
     pages.forEach((page, i) => {
-      if (i > 0) doc.addPage();
-      const maxW = pageWidth - margin * 2;
-      const maxH = pageHeight - margin * 2;
-      const imgScale = Math.min(maxW / page.processedCanvas.width, maxH / page.processedCanvas.height);
-      const w = page.processedCanvas.width * imgScale;
-      const h = page.processedCanvas.height * imgScale;
-      const x = (pageWidth - w) / 2;
-      const y = (pageHeight - h) / 2;
-      doc.addImage(page.processedDataUrl, 'JPEG', x, y, w, h);
+      const { width, height, orientation } = pageSizeForImage(page.processedCanvas.width, page.processedCanvas.height);
+      if (i === 0) {
+        doc = new jsPDF({ unit: 'pt', format: [width, height], orientation });
+      } else {
+        doc.addPage([width, height], orientation);
+      }
+      doc.addImage(page.processedDataUrl, 'JPEG', 0, 0, width, height);
     });
 
     exportBlob = doc.output('blob');
