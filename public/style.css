@@ -195,6 +195,16 @@ main.app-main {
   color: #1c1c1e;
 }
 
+.capture-bar select {
+  flex: 1;
+  min-width: 140px;
+  padding: 0.8rem;
+  border-radius: 10px;
+  border: 1px solid #d6d6da;
+  background: #fff;
+  font: inherit;
+}
+
 .page-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
@@ -305,14 +315,17 @@ main.app-main {
 
 .crop-handle {
   position: absolute;
-  width: 26px;
-  height: 26px;
-  margin-left: -13px;
-  margin-top: -13px;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  margin-top: -22px;
   border-radius: 50%;
-  background: #0a6bff;
-  border: 3px solid #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  /* A ring rather than a solid disc — the touch target is a full 44px (per mobile
+     a11y guidelines; the old 26px solid dot was hard to grab), but only a thin
+     outline is drawn so it doesn't obscure the document underneath. */
+  background: rgba(10, 107, 255, 0.25);
+  border: 3px solid #0a6bff;
+  box-shadow: 0 0 0 2px #fff, 0 1px 4px rgba(0, 0, 0, 0.5);
   touch-action: none;
 }
 

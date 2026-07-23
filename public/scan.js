@@ -45,13 +45,13 @@ function scaledCanvasFromImage(img, maxDim) {
 }
 
 function defaultCorners(width, height) {
-  const mx = width * 0.05;
-  const my = height * 0.05;
+  // Full frame by default — the user pulls corners inward if they want to crop,
+  // rather than starting from an already-cropped, confusing-looking selection.
   return [
-    [mx, my],
-    [width - mx, my],
-    [width - mx, height - my],
-    [mx, height - my],
+    [0, 0],
+    [width, 0],
+    [width, height],
+    [0, height],
   ];
 }
 
@@ -75,12 +75,17 @@ async function addFiles(fileList) {
 }
 
 document.getElementById('cameraInput').addEventListener('change', (e) => {
-  addFiles(e.target.files);
+  // Snapshot into a plain array before clearing the input — e.target.files is a
+  // live FileList, and resetting .value truncates it out from under an in-flight
+  // async loop, which was why only the first of several picked photos ever got added.
+  const files = Array.from(e.target.files);
   e.target.value = '';
+  addFiles(files);
 });
 document.getElementById('galleryInput').addEventListener('change', (e) => {
-  addFiles(e.target.files);
+  const files = Array.from(e.target.files);
   e.target.value = '';
+  addFiles(files);
 });
 
 // --- Add existing PDFs (merge their pages in alongside scanned photos) ---
@@ -111,18 +116,10 @@ async function addPdfFiles(fileList) {
           new Promise((_, reject) => setTimeout(() => reject(new Error('Rendering timed out — try again with this tab in the foreground')), 20000)),
         ]);
 
-        // Already a flat digital page (not a photo), so no inset — corners start
-        // at the exact page bounds. The user can still drag them if they want to
-        // crop it, same as any other page.
         const page = {
           id: newId(),
           canvas,
-          corners: [
-            [0, 0],
-            [canvas.width, 0],
-            [canvas.width, canvas.height],
-            [0, canvas.height],
-          ],
+          corners: defaultCorners(canvas.width, canvas.height),
           filter: 'original',
           processedCanvas: null,
           processedDataUrl: null,
@@ -140,8 +137,9 @@ async function addPdfFiles(fileList) {
 }
 
 document.getElementById('pdfInput').addEventListener('change', (e) => {
-  addPdfFiles(e.target.files);
+  const files = Array.from(e.target.files);
   e.target.value = '';
+  addPdfFiles(files);
 });
 
 // --- Processing ---
@@ -159,6 +157,7 @@ function renderPages() {
   pageGrid.innerHTML = '';
   noPagesEl.classList.toggle('hidden', pages.length > 0);
   exportBtn.disabled = pages.length === 0;
+  document.getElementById('allFilterBar').classList.toggle('hidden', pages.length === 0);
 
   pages.forEach((page, index) => {
     const thumb = document.createElement('div');
@@ -207,6 +206,15 @@ function renderPages() {
     pageGrid.append(thumb);
   });
 }
+
+document.getElementById('applyAllFilterBtn').addEventListener('click', () => {
+  const filter = document.getElementById('allFilterSelect').value;
+  pages.forEach((page) => {
+    page.filter = filter;
+    computeProcessed(page);
+  });
+  renderPages();
+});
 
 cancelBtn.addEventListener('click', () => {
   if (pages.length === 0 || confirm('Discard this scan?')) {
@@ -257,14 +265,16 @@ function canvasToImageSync(canvas) {
   return canvas;
 }
 
+const CSS_FILTER_PREVIEWS = {
+  original: 'none',
+  grayscale: 'grayscale(1)',
+  bw: 'grayscale(1) contrast(3) brightness(1.1)',
+  enhance: 'grayscale(1) contrast(1.6) brightness(1.15)',
+  bright: 'brightness(1.35)',
+};
+
 function applyCssFilterPreview() {
-  if (editState.filter === 'grayscale') {
-    editorCanvas.style.filter = 'grayscale(1)';
-  } else if (editState.filter === 'bw') {
-    editorCanvas.style.filter = 'grayscale(1) contrast(3) brightness(1.1)';
-  } else {
-    editorCanvas.style.filter = 'none';
-  }
+  editorCanvas.style.filter = CSS_FILTER_PREVIEWS[editState.filter] || 'none';
 }
 
 function drawEditorCanvas() {
@@ -293,6 +303,9 @@ function createHandles() {
 
     handle.addEventListener('pointerdown', (ev) => {
       ev.preventDefault();
+      // Capture the pointer on the handle itself so fast finger movements keep
+      // being tracked even once the pointer strays off this small hit area.
+      handle.setPointerCapture(ev.pointerId);
       const onMove = (moveEv) => {
         const rect = editorCanvas.getBoundingClientRect();
         const displayScale = editorCanvas.width / rect.width;
@@ -303,11 +316,13 @@ function createHandles() {
         drawEditorCanvas();
       };
       const onUp = () => {
-        document.removeEventListener('pointermove', onMove);
-        document.removeEventListener('pointerup', onUp);
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onUp);
+        handle.removeEventListener('pointercancel', onUp);
       };
-      document.addEventListener('pointermove', onMove);
-      document.addEventListener('pointerup', onUp);
+      handle.addEventListener('pointermove', onMove);
+      handle.addEventListener('pointerup', onUp);
+      handle.addEventListener('pointercancel', onUp);
     });
 
     return handle;

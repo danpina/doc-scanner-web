@@ -22,6 +22,17 @@
       <input type="file" id="pdfInput" accept="application/pdf" multiple class="hidden" />
     </div>
 
+    <div class="capture-bar hidden" id="allFilterBar">
+      <select id="allFilterSelect">
+        <option value="original">Original</option>
+        <option value="grayscale">Grayscale</option>
+        <option value="bw">Black &amp; White</option>
+        <option value="enhance">Enhance</option>
+        <option value="bright">Brighten</option>
+      </select>
+      <button id="applyAllFilterBtn" class="secondary">Apply to all pages</button>
+    </div>
+
     <div class="page-grid" id="pageGrid"></div>
     <p class="empty-state hidden" id="noPages">Take or choose a photo to start this scan.</p>
   </main>
@@ -45,6 +56,8 @@
       <button data-filter="original" class="filter-btn active">Original</button>
       <button data-filter="grayscale" class="filter-btn">Grayscale</button>
       <button data-filter="bw" class="filter-btn">B &amp; W</button>
+      <button data-filter="enhance" class="filter-btn">Enhance</button>
+      <button data-filter="bright" class="filter-btn">Brighten</button>
       <button id="resetCornersBtn">Reset crop</button>
     </div>
   </div>
