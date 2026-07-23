@@ -60,6 +60,17 @@ function scaledCanvasFromImage(img, maxDim) {
   return canvas;
 }
 
+function rotateCanvas90(sourceCanvas) {
+  const rotated = document.createElement('canvas');
+  rotated.width = sourceCanvas.height;
+  rotated.height = sourceCanvas.width;
+  const ctx = rotated.getContext('2d');
+  ctx.translate(rotated.width, 0);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(sourceCanvas, 0, 0);
+  return rotated;
+}
+
 function defaultCorners(width, height) {
   // Full frame by default — the user pulls corners inward if they want to crop,
   // rather than starting from an already-cropped, confusing-looking selection.
@@ -247,40 +258,48 @@ const editorCanvasWrap = document.getElementById('editorCanvasWrap');
 const editorCanvas = document.getElementById('editorCanvas');
 const editorCtx = editorCanvas.getContext('2d');
 
-let editState = null; // { index, preview, scale, corners (preview-space), filter, handles: [div,...], originalCorners, originalFilter }
+let editState = null; // { index, preview, scale, corners (preview-space), filter, handles: [div,...], originalCorners, originalFilter, originalCanvas }
 
 function openEditor(index) {
   const page = pages[index];
-  const preview = scaledCanvasFromImage(canvasToImageSync(page.canvas), MAX_PREVIEW_DIM);
-  const scale = preview.width / page.canvas.width;
 
   editState = {
     index,
-    preview,
-    scale,
-    corners: page.corners.map(([x, y]) => [x * scale, y * scale]),
+    preview: null,
+    scale: null,
+    corners: null,
     filter: page.filter,
     handles: [],
     originalCorners: page.corners.map((c) => [...c]),
     originalFilter: page.filter,
+    originalCanvas: page.canvas,
   };
 
-  editorCanvas.width = preview.width;
-  editorCanvas.height = preview.height;
   applyCssFilterPreview();
-
   document.querySelectorAll('.filter-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.filter === page.filter);
   });
 
   editorOverlay.classList.remove('hidden');
-  drawEditorCanvas();
-  createHandles();
+  rebuildEditorPreview();
 }
 
-function canvasToImageSync(canvas) {
-  // The canvas itself can be drawn directly by drawImage, no need for a real Image element.
-  return canvas;
+// (Re)builds the preview canvas + corner handles from the page's current
+// canvas/corners — called on open, and again after a rotation changes the
+// page's dimensions out from under the in-progress edit.
+function rebuildEditorPreview() {
+  const page = pages[editState.index];
+  const preview = scaledCanvasFromImage(page.canvas, MAX_PREVIEW_DIM);
+  const scale = preview.width / page.canvas.width;
+
+  editState.preview = preview;
+  editState.scale = scale;
+  editState.corners = page.corners.map(([x, y]) => [x * scale, y * scale]);
+
+  editorCanvas.width = preview.width;
+  editorCanvas.height = preview.height;
+  drawEditorCanvas();
+  createHandles();
 }
 
 const CSS_FILTER_PREVIEWS = {
@@ -378,8 +397,19 @@ document.getElementById('resetCornersBtn').addEventListener('click', () => {
   drawEditorCanvas();
 });
 
+document.getElementById('rotateBtn').addEventListener('click', () => {
+  const page = pages[editState.index];
+  page.canvas = rotateCanvas90(page.canvas);
+  // The old crop corners were measured against the pre-rotation dimensions and
+  // wouldn't map sensibly onto the rotated page, so start fresh at full frame —
+  // same as "Reset crop".
+  page.corners = defaultCorners(page.canvas.width, page.canvas.height);
+  rebuildEditorPreview();
+});
+
 document.getElementById('editorCancel').addEventListener('click', () => {
   const page = pages[editState.index];
+  page.canvas = editState.originalCanvas;
   page.corners = editState.originalCorners;
   page.filter = editState.originalFilter;
   closeEditor();
