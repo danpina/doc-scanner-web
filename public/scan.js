@@ -35,6 +35,22 @@ function loadImage(src) {
   });
 }
 
+// Explicitly applies the photo's EXIF orientation tag rather than relying on
+// whatever the browser/OS defaults to — phone photos are frequently stored
+// with the sensor's native (often sideways) pixel data plus a rotation tag,
+// and that tag isn't always honored consistently across browsers otherwise.
+async function loadOrientedImage(file) {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await createImageBitmap(file, { imageOrientation: 'from-image' });
+    } catch {
+      // Some browsers support createImageBitmap but not this option — fall through.
+    }
+  }
+  const dataUrl = await readFileAsDataUrl(file);
+  return loadImage(dataUrl);
+}
+
 function scaledCanvasFromImage(img, maxDim) {
   const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
   const canvas = document.createElement('canvas');
@@ -57,9 +73,9 @@ function defaultCorners(width, height) {
 
 async function addFiles(fileList) {
   for (const file of fileList) {
-    const dataUrl = await readFileAsDataUrl(file);
-    const img = await loadImage(dataUrl);
+    const img = await loadOrientedImage(file);
     const canvas = scaledCanvasFromImage(img, MAX_SOURCE_DIM);
+    if (typeof img.close === 'function') img.close(); // release ImageBitmap's decoded pixel memory promptly
     const page = {
       id: newId(),
       canvas,
