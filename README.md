@@ -13,6 +13,7 @@ This is an independent project from the native iOS `DocScanner` app — same ide
 - **Reorder / delete** pages before exporting.
 - **Export**: pages are assembled into a PDF client-side with jsPDF, each page sized to match its own image's aspect ratio (no white borders). From there you can Download it, Share it (uses the Web Share API to open your phone's native share sheet — Mail, WhatsApp, AirDrop, etc.), or Save it to your account so it's there next time you open the app.
 - **Admin panel** (`/admin.html`, admins only): create accounts, reset passwords, grant/revoke admin, delete users — there's no public signup form by design.
+- **Guest mode** ("Continue as Guest" on the login page): every scan/crop/filter/export feature works without an account — the only thing gated behind login is "Save to My Scans", since that's the one feature that actually touches the server.
 
 All image processing (crop math, filters, PDF assembly) runs in the browser — photos never leave your phone unless you tap "Save to My Scans".
 

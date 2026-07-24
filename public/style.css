@@ -74,6 +74,15 @@ button {
   font-size: 1rem;
 }
 
+.guest-link {
+  margin: 1.25rem 0 0.25rem;
+  font-weight: 600;
+}
+
+.guest-note {
+  margin: 0;
+}
+
 /* --- App shell --- */
 header.app-header {
   display: flex;

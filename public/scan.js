@@ -1,4 +1,23 @@
-renderUserBar('userBar');
+const IS_GUEST = new URLSearchParams(location.search).get('guest') === '1';
+const CANCEL_DESTINATION = IS_GUEST ? 'login.html' : 'index.html';
+
+if (IS_GUEST) {
+  // Skip renderUserBar entirely — it calls /api/me, which would 401 and bounce
+  // a guest straight to the login page instead of just showing a plain header.
+  const userBar = document.getElementById('userBar');
+  const guestLabel = document.createElement('span');
+  guestLabel.className = 'muted';
+  guestLabel.textContent = 'Guest mode';
+  const loginLink = document.createElement('a');
+  loginLink.href = 'login.html';
+  loginLink.textContent = 'Log in';
+  userBar.append(guestLabel, loginLink);
+
+  document.getElementById('saveScanBtn').classList.add('hidden');
+  document.getElementById('guestSaveNote').classList.remove('hidden');
+} else {
+  renderUserBar('userBar');
+}
 
 const MAX_SOURCE_DIM = 2000; // downscale captured photos to keep warps/PDFs fast without losing document sharpness
 const MAX_PREVIEW_DIM = 900; // editor crop UI works on a smaller preview for smooth dragging
@@ -245,10 +264,10 @@ document.getElementById('applyAllFilterBtn').addEventListener('click', () => {
 
 cancelBtn.addEventListener('click', () => {
   // Nothing to lose yet — skip the confirm step armConfirm would otherwise arm.
-  if (pages.length === 0) window.location.href = 'index.html';
+  if (pages.length === 0) window.location.href = CANCEL_DESTINATION;
 });
 armConfirm(cancelBtn, 'Discard?', () => {
-  window.location.href = 'index.html';
+  window.location.href = CANCEL_DESTINATION;
 });
 
 // --- Editor (crop + filter) ---
