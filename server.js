@@ -39,7 +39,16 @@ app.get('/login.html', (req, res) => sendPage(res, 'login.html'));
 // --- Gated pages ---
 app.get('/', requireAuthPage, (req, res) => sendPage(res, 'index.html'));
 app.get('/index.html', requireAuthPage, (req, res) => sendPage(res, 'index.html'));
-app.get('/scan.html', requireAuthPage, (req, res) => sendPage(res, 'scan.html'));
+// Guest mode (?guest=1) skips the auth check entirely — the whole scan/crop/
+// filter/export pipeline runs client-side, so the only thing that actually
+// needs a login is the "Save to My Scans" API call, which requireAuthApi on
+// POST /api/scans already protects regardless of what this page allows.
+app.get(
+  '/scan.html',
+  (req, res, next) => (req.query.guest === '1' ? sendPage(res, 'scan.html') : next()),
+  requireAuthPage,
+  (req, res) => sendPage(res, 'scan.html'),
+);
 app.get('/admin.html', requireAdminPage, (req, res) => sendPage(res, 'admin.html'));
 
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
