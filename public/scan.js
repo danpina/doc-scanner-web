@@ -5,13 +5,25 @@ if (IS_GUEST) {
   // Skip renderUserBar entirely — it calls /api/me, which would 401 and bounce
   // a guest straight to the login page instead of just showing a plain header.
   const userBar = document.getElementById('userBar');
+
+  // Guests never reach index.html (it's login-gated), so this is the only
+  // place they'd ever see the support link — logged-in users still only see
+  // it on the dashboard, not cluttering their active scan workflow.
+  const supportLink = document.createElement('a');
+  supportLink.href = 'https://paypal.me/danipinaNew/5eur';
+  supportLink.target = '_blank';
+  supportLink.rel = 'noopener';
+  supportLink.className = 'support-link';
+  supportLink.title = 'Buy me a coffee';
+  supportLink.textContent = '☕ Buy me a coffee';
+
   const guestLabel = document.createElement('span');
   guestLabel.className = 'muted';
   guestLabel.textContent = 'Guest mode';
   const loginLink = document.createElement('a');
   loginLink.href = 'login.html';
   loginLink.textContent = 'Log in';
-  userBar.append(guestLabel, loginLink);
+  userBar.append(supportLink, guestLabel, loginLink);
 
   document.getElementById('saveScanBtn').classList.add('hidden');
   document.getElementById('guestSaveNote').classList.remove('hidden');
