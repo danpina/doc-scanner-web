@@ -66,6 +66,7 @@ app.get(
   requireAuthPage,
   (req, res) => sendPage(res, 'scan.html'),
 );
+app.get('/account.html', requireAuthPage, (req, res) => sendPage(res, 'account.html'));
 app.get('/admin.html', requireAdminPage, (req, res) => sendPage(res, 'admin.html'));
 
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));

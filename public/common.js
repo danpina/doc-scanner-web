@@ -24,6 +24,11 @@ async function renderUserBar(containerId) {
     links.push(adminLink);
   }
 
+  const accountLink = document.createElement('a');
+  accountLink.href = 'account.html';
+  accountLink.textContent = 'Account';
+  links.push(accountLink);
+
   const emailSpan = document.createElement('span');
   emailSpan.className = 'muted';
   emailSpan.textContent = user.email;
