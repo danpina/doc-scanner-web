@@ -203,6 +203,46 @@ createForm.addEventListener('submit', async (event) => {
   }
 });
 
+async function loadAppleStatus() {
+  const statusEl = document.getElementById('appleStatus');
+  const res = await authedFetch('/api/admin/apple-status');
+  const status = await res.json();
+  if (status.problem) {
+    const shape = status.keyShape;
+    const hints = [];
+    if (shape && status.privateKeySet) {
+      if (!shape.hasBeginMarker || !shape.hasEndMarker) hints.push('the key is missing its BEGIN/END lines');
+      if (shape.wrappedInQuotes) hints.push('the value is wrapped in quotation marks');
+      hints.push(`${shape.length} characters, ${shape.realLineBreaks} line breaks`);
+    }
+    statusEl.textContent = 'Not working: ' + status.problem + (hints.length ? ' (' + hints.join('; ') + ')' : '');
+    statusEl.className = 'error';
+    return;
+  }
+  statusEl.textContent = `Settings present and the private key can sign (bundle ID ${status.bundleId}). Use the button to confirm with Apple.`;
+  statusEl.className = 'muted';
+}
+
+document.getElementById('appleCheckBtn').addEventListener('click', async (event) => {
+  const button = event.target;
+  const resultEl = document.getElementById('appleCheckResult');
+  button.disabled = true;
+  resultEl.className = 'muted';
+  resultEl.textContent = 'Asking Apple\u2026';
+  try {
+    const res = await authedFetch('/api/admin/apple-check', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not run the check');
+    resultEl.className = data.ok ? 'success' : 'error';
+    resultEl.textContent = data.message;
+  } catch (err) {
+    resultEl.className = 'error';
+    resultEl.textContent = err.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
 async function loadEmailStatus() {
   const statusEl = document.getElementById('emailStatus');
   const res = await authedFetch('/api/admin/email-status');
@@ -240,6 +280,7 @@ async function init() {
   const me = await renderUserBar('userBar');
   currentUserId = me ? me.id : null;
   await loadUsers();
+  await loadAppleStatus();
   await loadEmailStatus();
 }
 

@@ -38,6 +38,7 @@ import {
   verifyAppleIdentityToken,
   isAppleRevocationConfigured,
   describeAppleConfig,
+  checkAppleCredentials,
   exchangeAppleAuthorizationCode,
   revokeAppleRefreshToken,
 } from './appleAuth.js';
@@ -352,6 +353,14 @@ app.post('/api/admin/users', requireAdminApi, async (req, res) => {
 // Which Sign in with Apple settings are present and whether the key works (never the values).
 app.get('/api/admin/apple-status', requireAdminApi, (req, res) => {
   res.json(describeAppleConfig());
+});
+
+// Asks Apple whether the Sign in with Apple credentials actually work together.
+app.post('/api/admin/apple-check', requireAdminApi, async (req, res) => {
+  if (!allow(`apple-check:${req.user.id}`, 20, 60 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Too many checks. Try again later.' });
+  }
+  res.json(await checkAppleCredentials());
 });
 
 // What the server makes of the email settings (never the API key), so a typo in a dashboard

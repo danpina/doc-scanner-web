@@ -65,9 +65,25 @@ export function isAppleRevocationConfigured() {
   );
 }
 
+/// Turns an APPLE_PRIVATE_KEY value into a proper PEM, however a hosting dashboard mangled it:
+/// line breaks replaced by spaces, written as a literal backslash-n, CRLF, wrapped in quotation
+/// marks, or even just the bare base64 body. Returns '' if there is nothing key-like in it.
+export function normalizePrivateKey(raw) {
+  let text = String(raw ?? '').trim().replace(/^['"]+|['"]+$/g, '');
+  text = text.replace(/\\r/g, '').replace(/\\n/g, '\n').replace(/\r/g, '');
+
+  const label = /-----BEGIN ([A-Z ]+)-----/.exec(text)?.[1] ?? 'PRIVATE KEY';
+  const body = text
+    .replace(/-----BEGIN [A-Z ]*-----/g, '')
+    .replace(/-----END [A-Z ]*-----/g, '')
+    .replace(/\s+/g, '');
+  if (!body) return '';
+
+  return `-----BEGIN ${label}-----\n${body.match(/.{1,64}/g).join('\n')}\n-----END ${label}-----\n`;
+}
+
 function createClientSecret() {
-  // Hosting dashboards usually store a multi-line key as one line with literal "\n".
-  const privateKey = process.env.APPLE_PRIVATE_KEY.replace(/\\n/g, '\n');
+  const privateKey = normalizePrivateKey(process.env.APPLE_PRIVATE_KEY);
   return jwt.sign({}, privateKey, {
     algorithm: 'ES256',
     expiresIn: '10m',
@@ -110,6 +126,57 @@ export async function revokeAppleRefreshToken(refreshToken) {
   await postToApple('revoke', { token: refreshToken, token_type_hint: 'refresh_token' });
 }
 
+/// Only the *shape* of the key value (never its content), to help spot a mangled paste.
+function describeKeyShape(raw) {
+  const value = String(raw ?? '');
+  return {
+    length: value.length,
+    hasBeginMarker: /-----BEGIN [A-Z ]*-----/.test(value),
+    hasEndMarker: /-----END [A-Z ]*-----/.test(value),
+    realLineBreaks: (value.match(/\n/g) || []).length,
+    literalBackslashN: value.includes('\\n'),
+    wrappedInQuotes: /^['"]|['"]$/.test(value.trim()),
+  };
+}
+
+/// Asks Apple itself whether the team ID, key ID, key and bundle ID fit together, by making a
+/// token request with a fake code. Valid credentials get "invalid_grant" (the fake code was
+/// refused); anything wrong with the credentials gets "invalid_client".
+export async function checkAppleCredentials() {
+  if (!isAppleRevocationConfigured()) {
+    return { ok: false, step: 'settings', message: 'Some Apple settings are missing — see the status line.' };
+  }
+  try {
+    createClientSecret();
+  } catch (err) {
+    return { ok: false, step: 'key', message: `The private key couldn't sign a token: ${err.message}` };
+  }
+
+  try {
+    await postToApple('token', { grant_type: 'authorization_code', code: 'doc-scanner-credential-check' });
+    return { ok: true, step: 'apple', message: 'Apple accepted the credentials.' };
+  } catch (err) {
+    if (/invalid_grant/.test(err.message)) {
+      return {
+        ok: true,
+        step: 'apple',
+        message: 'Apple accepted the credentials (it only refused the fake test code, as expected).',
+      };
+    }
+    if (/invalid_client/.test(err.message)) {
+      return {
+        ok: false,
+        step: 'apple',
+        message:
+          'Apple rejected the credentials (invalid_client). Check APPLE_TEAM_ID and APPLE_KEY_ID, and that this key has ' +
+          '"Sign in with Apple" enabled and is configured for the com.danipina.docscanner App ID. It must be the ' +
+          'Sign in with Apple key, not the App Store Connect key.',
+      };
+    }
+    return { ok: false, step: 'apple', message: err.message };
+  }
+}
+
 /// For the admin-only status endpoint: says which Apple settings are present and whether the
 /// private key can actually sign a token, without ever revealing the values themselves.
 export function describeAppleConfig() {
@@ -120,6 +187,7 @@ export function describeAppleConfig() {
     privateKeySet: Boolean(process.env.APPLE_PRIVATE_KEY),
     revocationConfigured: isAppleRevocationConfigured(),
     privateKeyUsable: false,
+    keyShape: describeKeyShape(process.env.APPLE_PRIVATE_KEY),
     problem: null,
   };
 
