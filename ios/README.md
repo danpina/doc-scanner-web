@@ -28,17 +28,25 @@ If you do get a Mac: `brew install xcodegen && cd ios && xcodegen generate`, ope
 
 Mirrors the website's features:
 
-- **Login** (`/api/login`, cookie session persisted by `URLSession`) and **Continue as
-  Guest** — the whole scan → crop → filter → export flow, minus saving to an account.
+- **Log in, Sign up and Sign in with Apple** (`/api/login`, `/api/register`, `/api/auth/apple`;
+  cookie session persisted by `URLSession`), plus **Continue as Guest** — the whole scan →
+  crop → filter → export flow, minus saving to an account.
+- **Settings** (tap your avatar on My Scans) — log out, privacy/support links, and
+  **Delete account**, which removes the account and every saved scan (and revokes the Apple
+  token for Sign in with Apple accounts, once the Apple key is configured — see below).
 - **Scan** with Apple's document camera (VisionKit — auto edge detection and flattening),
   **Photos** (multi-select), or **PDF** (pulls every page of an existing PDF in).
-- **Page editor** — drag the four crop corners (44 pt touch targets), **Rotate**, and the
-  five filters (Original / Grayscale / Black & White / Enhance / Brighten — a pixel-for-pixel
-  port of `public/filters.js`). **Apply to all pages** from the main screen.
+- **Page editor** — drag the four crop corners (44 pt touch targets, everything outside the
+  selection dimmed), **Rotate**, and the five filters (Original / Grayscale / Black & White /
+  Enhance / Brighten — a pixel-for-pixel port of `public/filters.js`), each shown as a live
+  mini-preview. **Apply to all pages** from the main screen.
 - **Reorder / delete** pages with the same ⬅ ✏️ 🗑 ➡ controls as the web.
 - **Export** — a PDF with every page sized to its own image's aspect ratio (no white
   borders), then **Share / Save to Files** or **Save to My Scans** (signed-in only).
-- **My Scans** — saved scans from `/api/scans`: view, share, delete (swipe), pull to refresh.
+- **My Scans** — saved scans from `/api/scans`, grouped by month with search: view, share,
+  delete (swipe or long-press), pull to refresh.
+
+The look follows the app icon: a royal-blue gradient with an amber accent (`Shared/Theme.swift`).
 
 **Not ported:** the Admin screen (user management). Do that on the website; add it here the
 same way as the other screens if you ever need it on mobile.
@@ -71,20 +79,35 @@ The free Render plan sleeps when idle and takes up to a minute to wake, so the a
    TestFlight a few minutes after the upload finishes processing. If a run fails, the last
    lines of the failing `xcodebuild` step are copied into the run's annotations.
 
+## Sign in with Apple — setup
+
+The code and entitlement are in place; three things have to line up on Apple's/Render's side:
+
+1. **App ID capability.** developer.apple.com → Identifiers → `com.danipina.docscanner` →
+   enable **Sign In with Apple**. (Automatic signing usually does this itself on the first
+   archive; enabling it by hand avoids a failed first run.)
+2. **`APPLE_BUNDLE_ID` on Render** must equal the bundle ID (`com.danipina.docscanner`). The
+   server checks Apple's identity token was issued for exactly that audience. It's declared in
+   `render.yaml`, but check the service's Environment tab if sign-in says "Invalid Apple credential".
+3. **Token revocation on account deletion** (App Store requirement for Sign in with Apple apps):
+   create a key under developer.apple.com → Keys with **Sign In with Apple** enabled, then set
+   `APPLE_TEAM_ID`, `APPLE_KEY_ID` and `APPLE_PRIVATE_KEY` (the `.p8` contents, line breaks as
+   `
+`) on Render. Set these *before* people start signing in with Apple — the token that
+   gets revoked is captured at sign-in, so earlier accounts can't be revoked later. Until then,
+   deleting an account still works; it just skips the Apple revocation.
+
 ## Before an App Store submission (not needed for TestFlight)
 
 - **App icon** is a placeholder copied from the older DocScanner app — replace
   `Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png` (1024×1024, no alpha).
 - **Display name** — "Doc Scanner" may already be taken in the store; it's `CFBundleDisplayName`
   in `project.yml` (the store listing name is set separately in App Store Connect).
-- **Privacy policy + support pages** — required for the listing. The vocab app has
-  `public/privacy.html` / `support.html` and `ios/APP_STORE_LISTING.md` you can adapt.
-- **Review access** — Guest mode means a reviewer can try the whole app without credentials.
-  If you want them to see "My Scans" too, give them a demo account in the review notes.
-- **Accounts** — this backend has no self-registration (accounts are created by an admin), so
-  there's no Sign in with Apple / account-deletion requirement yet. If you later add a public
-  signup like the vocab app got, you'll need both (Apple requires Sign in with Apple
-  alongside other third-party logins, and in-app account deletion for any app with signup).
+- **Privacy policy + support pages** — live at `/privacy.html` and `/support.html` on the site
+  (linked from the login screen and Settings); use those URLs in the listing. The vocab app's
+  `ios/APP_STORE_LISTING.md` is a good template for the rest.
+- **Review access** — Guest mode lets a reviewer try the whole app without credentials. Also
+  put a demo account in the review notes so they can see My Scans and Settings.
 - **"Buy me a coffee"** is deliberately *not* in the app. App Store rules route digital
   tips/donations to a developer through In-App Purchase, and an external PayPal link is a
   common rejection reason. It stays on the website.

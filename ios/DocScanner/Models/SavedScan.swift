@@ -8,9 +8,11 @@ struct SavedScan: Decodable, Identifiable, Equatable {
     let pdfSize: Int
     let createdAt: String
 
+    var createdDate: Date? { Self.parseDate(createdAt) }
+
     var subtitle: String {
         var parts: [String] = []
-        if let date = Self.parseDate(createdAt) {
+        if let date = createdDate {
             parts.append(date.formatted(date: .abbreviated, time: .omitted))
         }
         parts.append(pageCount == 1 ? "1 page" : "\(pageCount) pages")

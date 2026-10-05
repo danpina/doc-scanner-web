@@ -21,10 +21,14 @@ struct CropCanvas: View {
                     .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
 
+                // Everything outside the selection is dimmed, like a scanner's crop guide.
+                dimPath(in: rect)
+                    .fill(Color.black.opacity(0.5), style: FillStyle(eoFill: true))
+                    .allowsHitTesting(false)
+
                 quadPath(in: rect)
-                    .fill(Color.accentColor.opacity(0.12))
-                quadPath(in: rect)
-                    .stroke(Color.accentColor, lineWidth: 2)
+                    .stroke(Theme.amber, style: StrokeStyle(lineWidth: 2.5, lineJoin: .round))
+                    .allowsHitTesting(false)
 
                 ForEach(0..<4, id: \.self) { index in
                     handle(index, in: rect)
@@ -40,16 +44,21 @@ struct CropCanvas: View {
     private func handle(_ index: Int, in rect: CGRect) -> some View {
         let center = corners.indices.contains(index) ? viewPoint(corners[index], in: rect) : CGPoint.zero
         return Circle()
-            .fill(Color.accentColor.opacity(0.25))
-            .overlay(Circle().stroke(Color.accentColor, lineWidth: 3))
-            // A full 44pt touch target — the old 26pt dot on the web was hard to grab.
+            .fill(Color.white)
+            .frame(width: 24, height: 24)
+            .overlay(Circle().stroke(Theme.amber, lineWidth: 4))
+            .shadow(color: Color.black.opacity(0.45), radius: 3, x: 0, y: 1)
+            // A full 44pt touch target around the 24pt dot.
             .frame(width: 44, height: 44)
             .contentShape(Circle())
             .position(center)
             .gesture(
                 DragGesture(minimumDistance: 0, coordinateSpace: .named(spaceName))
                     .onChanged { value in
-                        if dragStart == nil { dragStart = corners }
+                        if dragStart == nil {
+                            dragStart = corners
+                            Haptics.select()
+                        }
                         guard let start = dragStart,
                               start.indices.contains(index),
                               corners.indices.contains(index) else { return }
@@ -74,6 +83,15 @@ struct CropCanvas: View {
         path.addLine(to: viewPoint(corners[2], in: rect))
         path.addLine(to: viewPoint(corners[3], in: rect))
         path.closeSubpath()
+        return path
+    }
+
+    /// The whole image rectangle plus the quad; filled with the even-odd rule this leaves the
+    /// quad itself clear and covers everything around it.
+    private func dimPath(in rect: CGRect) -> Path {
+        var path = Path()
+        path.addRect(rect)
+        path.addPath(quadPath(in: rect))
         return path
     }
 

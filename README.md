@@ -12,7 +12,7 @@ This is an independent project from the native iOS `DocScanner` app — same ide
 - **Filter**: Original / Grayscale / Black & White per page (`public/filters.js`).
 - **Reorder / delete** pages before exporting.
 - **Export**: pages are assembled into a PDF client-side with jsPDF, each page sized to match its own image's aspect ratio (no white borders). From there you can Download it, Share it (uses the Web Share API to open your phone's native share sheet — Mail, WhatsApp, AirDrop, etc.), or Save it to your account so it's there next time you open the app.
-- **Admin panel** (`/admin.html`, admins only): create accounts, reset passwords, grant/revoke admin, delete users — there's no public signup form by design.
+- **Accounts**: anyone can sign up (email + password, or Sign in with Apple in the iOS app) and can delete their own account from the app's Settings. The **Admin panel** (`/admin.html`, admins only) creates accounts, resets passwords, grants/revokes admin and deletes users.
 - **Guest mode** ("Continue as Guest" on the login page): every scan/crop/filter/export feature works without an account — the only thing gated behind login is "Save to My Scans", since that's the one feature that actually touches the server.
 
 All image processing (crop math, filters, PDF assembly) runs in the browser — photos never leave your phone unless you tap "Save to My Scans".
@@ -35,7 +35,7 @@ doc-scanner-web/
   db.js                # Turso/libsql client + schema init
   auth.js / users.js    # login, JWT cookie sessions, user CRUD
   scans.js              # saved scans (PDF stored as a BLOB per user)
-  create-user.js        # CLI to create your login (no public signup form)
+  create-user.js        # CLI to bootstrap the first (admin) account
   public/
     login.html/js, style.css
     index.html / app.js       # dashboard: list, view, download, share, delete scans
@@ -77,4 +77,4 @@ Because it's a normal HTTPS website, your phone's camera (`getUserMedia`/`captur
 
 - Perspective warp runs synchronously on the main thread; very large photos (rare, since captures are downscaled to 2000px on the long edge) could cause a brief UI pause.
 - Adding a PDF renders its pages via pdf.js, which paces itself with `requestAnimationFrame` — if you switch away from the tab mid-import, rendering can stall until you switch back (there's a 20s timeout per page so it fails with a clear error rather than hanging forever). Keep the tab in the foreground while a PDF is importing.
-- No public signup — accounts are created via the Admin panel (or `create-user.js` for the first one), matching the vocab app's admin-only user creation.
+- Sign-up is open, and saved scans are stored as database blobs with no per-account quota or rate limiting yet — worth adding if the service gets real traffic (the free Turso plan has a storage cap).

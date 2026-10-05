@@ -19,46 +19,15 @@ struct ExportSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Title") {
-                    TextField("Title", text: $title)
+            ScrollView {
+                VStack(spacing: 18) {
+                    summaryCard
+                    titleCard
+                    actions
                 }
-
-                Section {
-                    Button {
-                        share()
-                    } label: {
-                        Label("Share / Save to Files", systemImage: "square.and.arrow.up")
-                    }
-
-                    if allowsSaving {
-                        Button {
-                            Task { await save() }
-                        } label: {
-                            Label("Save to My Scans", systemImage: "icloud.and.arrow.up")
-                        }
-                        .disabled(isSaving)
-                    }
-                } footer: {
-                    if allowsSaving {
-                        Text("\(ByteCountFormatter.string(fromByteCount: Int64(pdfData.count), countStyle: .file)) · \(pageCount) page\(pageCount == 1 ? "" : "s")")
-                    } else {
-                        Text("Guest mode — log in to save scans to an account.")
-                    }
-                }
-
-                if isSaving {
-                    HStack {
-                        ProgressView()
-                        Text("Saving…")
-                    }
-                    WakeHint()
-                }
-
-                if let errorMessage {
-                    Text(errorMessage).foregroundStyle(.red)
-                }
+                .padding(16)
             }
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .navigationTitle("Export")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -72,6 +41,87 @@ struct ExportSheet: View {
             .keyboardDismissible()
         }
     }
+
+    // MARK: Pieces
+
+    private var summaryCard: some View {
+        HStack(spacing: 14) {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.brandGradient)
+                .frame(width: 46, height: 58)
+                .overlay(
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(Theme.amber)
+                )
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Your PDF is ready")
+                    .font(.headline)
+                Text("\(pageCount) page\(pageCount == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: Int64(pdfData.count), countStyle: .file))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
+    }
+
+    private var titleCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Title")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+            TextField("Title", text: $title)
+                .font(.body)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
+    }
+
+    private var actions: some View {
+        VStack(spacing: 12) {
+            Button {
+                Haptics.tap()
+                share()
+            } label: {
+                Label("Share / Save to Files", systemImage: "square.and.arrow.up")
+            }
+            .buttonStyle(.primary)
+
+            if allowsSaving {
+                Button {
+                    Task { await save() }
+                } label: {
+                    if isSaving {
+                        ProgressView()
+                    } else {
+                        Label("Save to My Scans", systemImage: "icloud.and.arrow.up")
+                    }
+                }
+                .buttonStyle(.secondary)
+                .disabled(isSaving)
+
+                if isSaving {
+                    WakeHint()
+                }
+            } else {
+                Text("Guest mode — log in to save scans to an account.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
+    // MARK: Actions
 
     private var cleanTitle: String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -113,8 +163,10 @@ struct ExportSheet: View {
                 "/api/scans", method: .post,
                 body: SaveBody(title: cleanTitle, pageCount: pageCount, pdfBase64: pdfData.base64EncodedString())
             )
+            Haptics.success()
             onSaved()
         } catch {
+            Haptics.warning()
             errorMessage = error.localizedDescription
         }
     }

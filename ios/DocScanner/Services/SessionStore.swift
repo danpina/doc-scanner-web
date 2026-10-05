@@ -48,9 +48,63 @@ final class SessionStore: ObservableObject {
         }
     }
 
+    func register(email: String, password: String) async -> Bool {
+        errorMessage = nil
+        do {
+            struct RegisterBody: Encodable {
+                let email: String
+                let password: String
+            }
+            let _: LoginResponse = try await APIClient.shared.send(
+                "/api/register", method: .post,
+                body: RegisterBody(email: email, password: password)
+            )
+            await refreshMe()
+            if user != nil { isGuest = false }
+            return user != nil
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func loginWithApple(identityToken: String, authorizationCode: String?, email: String?) async -> Bool {
+        errorMessage = nil
+        do {
+            struct AppleBody: Encodable {
+                let identityToken: String
+                let authorizationCode: String?
+                let email: String?
+            }
+            let _: LoginResponse = try await APIClient.shared.send(
+                "/api/auth/apple", method: .post,
+                body: AppleBody(identityToken: identityToken, authorizationCode: authorizationCode, email: email)
+            )
+            await refreshMe()
+            if user != nil { isGuest = false }
+            return user != nil
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func continueAsGuest() {
         errorMessage = nil
         isGuest = true
+    }
+
+    /// Permanently deletes the signed-in account (saved scans included). Returns an error
+    /// message on failure, nil on success.
+    func deleteAccount() async -> String? {
+        do {
+            try await APIClient.shared.sendNoContent("/api/me", method: .delete)
+            user = nil
+            isGuest = false
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
     }
 
     func logout() async {
