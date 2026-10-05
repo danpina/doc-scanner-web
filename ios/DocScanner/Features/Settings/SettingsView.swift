@@ -10,6 +10,11 @@ struct SettingsView: View {
     @State private var deleteError: String?
     @State private var serverURLText = ServerConfig.baseURL?.absoluteString ?? ""
 
+    /// Accounts created with Apple start without a password; nil (older server) means "has one".
+    private var hasPassword: Bool {
+        session.user?.hasPassword ?? true
+    }
+
     private var versionText: String {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -27,7 +32,7 @@ struct SettingsView: View {
                             Text(session.user?.email ?? "")
                                 .font(.headline)
                                 .lineLimit(1)
-                            Text("Signed in")
+                            Text(session.user?.hasApple == true ? "Signed in with Apple" : "Signed in")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
@@ -36,13 +41,10 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    // Accounts created with Sign in with Apple have no password to change.
-                    if session.user?.hasApple != true {
-                        Button {
-                            showChangePassword = true
-                        } label: {
-                            Label("Change password", systemImage: "key")
-                        }
+                    Button {
+                        showChangePassword = true
+                    } label: {
+                        Label(hasPassword ? "Change password" : "Set a password", systemImage: "key")
                     }
 
                     Button {

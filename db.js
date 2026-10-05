@@ -46,6 +46,12 @@ async function init() {
     );
   }
 
+  // False for accounts created with Sign in with Apple: their password_hash is a random
+  // placeholder nobody knows. They can later "set" a real one (see POST /api/me/password).
+  if (!(await columnExists('users', 'password_set'))) {
+    await client.execute('ALTER TABLE users ADD COLUMN password_set INTEGER NOT NULL DEFAULT 1');
+  }
+
   // Kept so the Apple token can be revoked if the account is deleted.
   if (!(await columnExists('users', 'apple_refresh_token'))) {
     await client.execute('ALTER TABLE users ADD COLUMN apple_refresh_token TEXT');

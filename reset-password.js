@@ -22,11 +22,11 @@ if (!user) {
 }
 
 const password = chosenPassword || generateTemporaryPassword();
-await updateUser(user.id, { passwordHash: await hashPassword(password) });
+await updateUser(user.id, { passwordHash: await hashPassword(password), passwordSet: true });
 
 console.log(`Password reset for ${user.email}`);
 if (!chosenPassword) console.log(`Temporary password: ${password}`);
 if (user.appleSub) {
-  console.log('Note: this account signs in with Apple, so the password only matters if they also log in by email.');
+  console.log('Note: this account is linked to Apple; the password lets them log in by email as well.');
 }
 process.exit(0);

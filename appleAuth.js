@@ -109,3 +109,34 @@ export async function exchangeAppleAuthorizationCode(authorizationCode) {
 export async function revokeAppleRefreshToken(refreshToken) {
   await postToApple('revoke', { token: refreshToken, token_type_hint: 'refresh_token' });
 }
+
+/// For the admin-only status endpoint: says which Apple settings are present and whether the
+/// private key can actually sign a token, without ever revealing the values themselves.
+export function describeAppleConfig() {
+  const status = {
+    bundleId: process.env.APPLE_BUNDLE_ID || null,
+    teamIdSet: Boolean(process.env.APPLE_TEAM_ID),
+    keyIdSet: Boolean(process.env.APPLE_KEY_ID),
+    privateKeySet: Boolean(process.env.APPLE_PRIVATE_KEY),
+    revocationConfigured: isAppleRevocationConfigured(),
+    privateKeyUsable: false,
+    problem: null,
+  };
+
+  if (status.revocationConfigured) {
+    try {
+      createClientSecret();
+      status.privateKeyUsable = true;
+    } catch (err) {
+      status.problem = `The private key couldn't sign a token: ${err.message}`;
+    }
+  } else {
+    const missing = [];
+    if (!status.bundleId) missing.push('APPLE_BUNDLE_ID');
+    if (!status.teamIdSet) missing.push('APPLE_TEAM_ID');
+    if (!status.keyIdSet) missing.push('APPLE_KEY_ID');
+    if (!status.privateKeySet) missing.push('APPLE_PRIVATE_KEY');
+    status.problem = `Missing: ${missing.join(', ')}`;
+  }
+  return status;
+}

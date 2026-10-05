@@ -94,17 +94,19 @@ final class SessionStore: ObservableObject {
         isGuest = true
     }
 
-    /// Returns an error message on failure, nil on success.
-    func changePassword(current: String, new: String) async -> String? {
+    /// Changes the password — or sets the first one (pass `current: nil`) for an account created
+    /// with Apple. Returns an error message on failure, nil on success.
+    func changePassword(current: String?, new: String) async -> String? {
         do {
             struct ChangeBody: Encodable {
-                let currentPassword: String
+                let currentPassword: String?
                 let newPassword: String
             }
             try await APIClient.shared.sendNoContent(
                 "/api/me/password", method: .post,
                 body: ChangeBody(currentPassword: current, newPassword: new)
             )
+            await refreshMe()
             return nil
         } catch {
             return error.localizedDescription
