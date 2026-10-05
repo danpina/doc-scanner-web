@@ -21,7 +21,7 @@ services:
       - key: APPLE_PRIVATE_KEY
         sync: false
       - key: EMAIL_PROVIDER
-        value: resend
+        value: brevo
       - key: EMAIL_API_KEY
         sync: false
       - key: EMAIL_FROM
