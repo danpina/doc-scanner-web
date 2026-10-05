@@ -26,6 +26,7 @@ import {
 import {
   verifyAppleIdentityToken,
   isAppleRevocationConfigured,
+  describeAppleConfig,
   exchangeAppleAuthorizationCode,
   revokeAppleRefreshToken,
 } from './appleAuth.js';
@@ -137,6 +138,7 @@ app.post('/api/auth/apple', async (req, res) => {
         email: email && !taken ? email : `apple-${appleSub}@docscanner.local`,
         passwordHash: await hashPassword(placeholderPassword),
         appleSub,
+        passwordSet: false,
       });
     }
   }
@@ -166,29 +168,31 @@ app.get('/api/me', requireAuthApi, (req, res) => {
     id: req.user.id,
     email: req.user.email,
     isAdmin: req.user.isAdmin,
-    // Apple accounts have a random placeholder password nobody knows, so the app hides
-    // "Change password" for them.
     hasApple: !!req.user.appleSub,
+    // False for accounts created with Apple that never chose a password: the app then
+    // offers "Set a password" instead of "Change password".
+    hasPassword: req.user.passwordSet,
   });
 });
 
+// Change your password — or, for an account that has none yet (created with Apple), set one so
+// you can also log in with your email.
 app.post('/api/me/password', requireAuthApi, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword) {
-    return res.status(400).json({ error: 'currentPassword and newPassword are required' });
-  }
-  if (req.user.appleSub) {
-    return res.status(400).json({ error: "Accounts that sign in with Apple don't have a password." });
-  }
+  if (!newPassword) return res.status(400).json({ error: 'newPassword is required' });
   if (newPassword.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters' });
   }
-  // 403, not 401: the clients treat 401 as "your session ended" and bounce to the login screen.
-  if (!(await verifyPassword(currentPassword, req.user.passwordHash))) {
-    return res.status(403).json({ error: 'Your current password is incorrect' });
+
+  if (req.user.passwordSet) {
+    if (!currentPassword) return res.status(400).json({ error: 'currentPassword is required' });
+    // 403, not 401: the clients treat 401 as "your session ended" and bounce to the login screen.
+    if (!(await verifyPassword(currentPassword, req.user.passwordHash))) {
+      return res.status(403).json({ error: 'Your current password is incorrect' });
+    }
   }
 
-  await updateUser(req.user.id, { passwordHash: await hashPassword(newPassword) });
+  await updateUser(req.user.id, { passwordHash: await hashPassword(newPassword), passwordSet: true });
   res.status(204).end();
 });
 
@@ -270,6 +274,11 @@ app.post('/api/admin/users', requireAdminApi, async (req, res) => {
   res.status(201).json(toAdminUser(user));
 });
 
+// Which Sign in with Apple settings are present and whether the key works (never the values).
+app.get('/api/admin/apple-status', requireAdminApi, (req, res) => {
+  res.json(describeAppleConfig());
+});
+
 // Generates a one-time temporary password for the account with this email. The admin passes
 // it on to the person, who can then change it in the app (Settings > Change password).
 app.post('/api/admin/reset-password', requireAdminApi, async (req, res) => {
@@ -280,7 +289,7 @@ app.post('/api/admin/reset-password', requireAdminApi, async (req, res) => {
   if (!user) return res.status(404).json({ error: 'No account with that email' });
 
   const temporaryPassword = generateTemporaryPassword();
-  await updateUser(user.id, { passwordHash: await hashPassword(temporaryPassword) });
+  await updateUser(user.id, { passwordHash: await hashPassword(temporaryPassword), passwordSet: true });
   res.json({ email: user.email, temporaryPassword });
 });
 
@@ -305,4 +314,10 @@ app.delete('/api/admin/users/:id', requireAdminApi, async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Doc Scanner running at http://localhost:${PORT}`);
+  const apple = describeAppleConfig();
+  console.log(
+    apple.revocationConfigured && apple.privateKeyUsable
+      ? 'Sign in with Apple: token revocation is configured'
+      : `Sign in with Apple: token revocation NOT working (${apple.problem})`
+  );
 });

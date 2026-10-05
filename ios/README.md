@@ -31,8 +31,9 @@ Mirrors the website's features:
 - **Log in, Sign up and Sign in with Apple** (`/api/login`, `/api/register`, `/api/auth/apple`;
   cookie session persisted by `URLSession`), plus **Continue as Guest** — the whole scan →
   crop → filter → export flow, minus saving to an account.
-- **Settings** (tap your avatar on My Scans) — **Change password** (hidden for Sign in with
-  Apple accounts), log out, privacy/support links, and
+- **Settings** (tap your avatar on My Scans) — **Change password** (or **Set a password**, for an
+  account created with Apple that has none yet, so it can also log in by email), log out,
+  privacy/support links, and
   **Delete account**, which removes the account and every saved scan (and revokes the Apple
   token for Sign in with Apple accounts, once the Apple key is configured — see below).
 - **Scan** with Apple's document camera (VisionKit — auto edge detection and flattening),
@@ -97,6 +98,15 @@ The code and entitlement are in place; three things have to line up on Apple's/R
 `) on Render. Set these *before* people start signing in with Apple — the token that
    gets revoked is captured at sign-in, so earlier accounts can't be revoked later. Until then,
    deleting an account still works; it just skips the Apple revocation.
+
+   To check it's set up right: the server logs `Sign in with Apple: token revocation is
+   configured` at startup (or says what's missing), and while logged in as an admin you can
+   open `/api/admin/apple-status` in the browser — it reports which settings are present and
+   whether the key can sign a token, without revealing any values.
+
+Note that Sign in with Apple creates a **separate** account unless Apple's email matches an
+existing one (and Apple has verified it) — sharing a different address than your email login
+gives a second, empty account.
 
 ## Before an App Store submission (not needed for TestFlight)
 

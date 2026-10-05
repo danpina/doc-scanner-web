@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Change your password — also the way to replace the temporary one an admin gave you.
+/// Change your password — also the way to replace the temporary one an admin gave you, and
+/// (for an account created with Apple) to set a first password so you can log in by email too.
 struct ChangePasswordView: View {
     @EnvironmentObject var session: SessionStore
     @Environment(\.dismiss) private var dismiss
@@ -11,16 +12,33 @@ struct ChangePasswordView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
 
+    /// An account that has no password yet doesn't need to prove a current one.
+    private var requiresCurrent: Bool {
+        session.user?.hasPassword ?? true
+    }
+
+    private var title: String {
+        requiresCurrent ? "Change password" : "Set a password"
+    }
+
     private var canSave: Bool {
-        !current.isEmpty && new.count >= 8 && new == confirm && !isSaving
+        (!requiresCurrent || !current.isEmpty) && new.count >= 8 && new == confirm && !isSaving
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    SecureField("Current (or temporary) password", text: $current)
-                        .textContentType(.password)
+                if requiresCurrent {
+                    Section {
+                        SecureField("Current (or temporary) password", text: $current)
+                            .textContentType(.password)
+                    }
+                } else {
+                    Section {
+                        Text("You signed up with Apple, so this account has no password yet. Set one to also be able to log in with your email.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Section {
@@ -54,7 +72,7 @@ struct ChangePasswordView: View {
                         if isSaving {
                             ProgressView()
                         } else {
-                            Text("Change password")
+                            Text(title)
                         }
                     }
                     .buttonStyle(.primary)
@@ -63,7 +81,7 @@ struct ChangePasswordView: View {
                     .listRowBackground(Color.clear)
                 }
             }
-            .navigationTitle("Change password")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -79,7 +97,7 @@ struct ChangePasswordView: View {
         isSaving = true
         defer { isSaving = false }
 
-        if let error = await session.changePassword(current: current, new: new) {
+        if let error = await session.changePassword(current: requiresCurrent ? current : nil, new: new) {
             Haptics.warning()
             errorMessage = error
         } else {
