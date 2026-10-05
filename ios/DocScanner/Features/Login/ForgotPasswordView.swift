@@ -29,7 +29,7 @@ struct ForgotPasswordView: View {
                                 .foregroundStyle(Theme.brandGradient)
                             Text("Check your email")
                                 .font(.headline)
-                            Text("If an account exists for that address, we've sent a link to choose a new password. It works once and expires in an hour. Look in your spam folder if it doesn't arrive.")
+                            Text("If an account exists for that address, we've sent a link to choose a new password. It works once and expires in an hour.")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
@@ -37,6 +37,23 @@ struct ForgotPasswordView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                     }
+
+                    Section {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "tray.full.fill")
+                                .font(.title3)
+                                .foregroundStyle(Theme.blueDeep)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Can't find it? Check your spam or junk folder.")
+                                    .font(.subheadline.weight(.semibold))
+                                Text("Reset emails often end up there. If you find it, mark it \"Not spam\" so the link works.")
+                                    .font(.footnote)
+                            }
+                            .foregroundStyle(Color.black.opacity(0.85))
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .listRowBackground(Theme.amber.opacity(0.85))
 
                     Section {
                         Button("Done") { dismiss() }

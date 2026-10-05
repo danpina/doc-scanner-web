@@ -514,3 +514,15 @@ main.app-main {
     display: none;
   }
 }
+
+/* "Check your spam folder" callout on the forgot-password confirmation. */
+.spam-reminder {
+  margin: 0.5rem 0 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  background: #fff8e1;
+  border: 1px solid #f0d78c;
+  color: #4a3b00;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
