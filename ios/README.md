@@ -28,6 +28,7 @@ If you do get a Mac: `brew install xcodegen && cd ios && xcodegen generate`, ope
 
 Mirrors the website's features:
 
+- **Forgot password?** on the login screen emails a reset link (needs the email service set up on the server).
 - **Log in, Sign up and Sign in with Apple** (`/api/login`, `/api/register`, `/api/auth/apple`;
   cookie session persisted by `URLSession`), plus **Continue as Guest** — the whole scan →
   crop → filter → export flow, minus saving to an account.

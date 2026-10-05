@@ -33,8 +33,8 @@ export function generateTemporaryPassword(length = 12) {
   return password;
 }
 
-export function setAuthCookie(req, res, userId) {
-  const token = jwt.sign({ userId }, requireSecret(), { expiresIn: TOKEN_TTL });
+export function setAuthCookie(req, res, user) {
+  const token = jwt.sign({ userId: user.id, v: user.sessionVersion }, requireSecret(), { expiresIn: TOKEN_TTL });
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
     secure: req.secure,
@@ -51,8 +51,12 @@ async function getUserFromRequest(req) {
   const token = req.cookies?.[COOKIE_NAME];
   if (!token) return null;
   try {
-    const { userId } = jwt.verify(token, requireSecret());
-    return await getUserById(userId);
+    const { userId, v } = jwt.verify(token, requireSecret());
+    const user = await getUserById(userId);
+    // A cookie issued before a password change carries an older version: treat it as logged out.
+    // (Cookies from before this existed have no `v`, which counts as 0 — still valid until then.)
+    if (!user || (v ?? 0) !== user.sessionVersion) return null;
+    return user;
   } catch {
     return null;
   }

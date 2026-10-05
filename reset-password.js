@@ -3,7 +3,7 @@
 // Runs against whatever database .env points at (Turso in production, local SQLite otherwise).
 // Usage: node reset-password.js someone@example.com ["a-new-password"]
 import { generateTemporaryPassword, hashPassword } from './auth.js';
-import { getUserByEmail, updateUser } from './users.js';
+import { getUserByEmail, setUserPassword } from './users.js';
 
 const [, , email, chosenPassword] = process.argv;
 if (!email) {
@@ -22,7 +22,7 @@ if (!user) {
 }
 
 const password = chosenPassword || generateTemporaryPassword();
-await updateUser(user.id, { passwordHash: await hashPassword(password), passwordSet: true });
+await setUserPassword(user.id, await hashPassword(password));
 
 console.log(`Password reset for ${user.email}`);
 if (!chosenPassword) console.log(`Temporary password: ${password}`);
