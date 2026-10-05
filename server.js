@@ -1,4 +1,5 @@
 import cookieParser from 'cookie-parser';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 import express from 'express';
 import path from 'path';
@@ -13,7 +14,20 @@ import {
   requireAdminApi,
   requireAdminPage,
 } from './auth.js';
-import { getUserByEmail, getAllUsers, createUser, updateUser, deleteUser } from './users.js';
+import {
+  getUserByEmail,
+  getUserByAppleSub,
+  getAllUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+} from './users.js';
+import {
+  verifyAppleIdentityToken,
+  isAppleRevocationConfigured,
+  exchangeAppleAuthorizationCode,
+  revokeAppleRefreshToken,
+} from './appleAuth.js';
 import { getScansForUser, getScanPdf, createScan, deleteScan } from './scans.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -35,6 +49,7 @@ function sendPage(res, file) {
 
 // --- Public pages ---
 app.get('/login.html', (req, res) => sendPage(res, 'login.html'));
+app.get('/register.html', (req, res) => sendPage(res, 'register.html'));
 
 // --- Gated pages ---
 app.get('/', requireAuthPage, (req, res) => sendPage(res, 'index.html'));
@@ -67,6 +82,79 @@ app.post('/api/login', async (req, res) => {
   res.json({ email: user.email });
 });
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+app.post('/api/register', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'email and password are required' });
+  }
+  if (!EMAIL_PATTERN.test(email.trim())) {
+    return res.status(400).json({ error: 'Enter a valid email address' });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+
+  const existing = await getUserByEmail(email);
+  if (existing) return res.status(409).json({ error: 'An account with that email already exists' });
+
+  const user = await createUser({ email, passwordHash: await hashPassword(password) });
+  setAuthCookie(req, res, user.id);
+  res.status(201).json({ email: user.email });
+});
+
+app.post('/api/auth/apple', async (req, res) => {
+  const { identityToken, authorizationCode, email: providedEmail } = req.body;
+  if (!identityToken) return res.status(400).json({ error: 'identityToken is required' });
+
+  let claims;
+  try {
+    claims = await verifyAppleIdentityToken(identityToken);
+  } catch (err) {
+    return res.status(401).json({ error: `Invalid Apple credential: ${err.message}` });
+  }
+
+  const appleSub = claims.sub;
+  let user = await getUserByAppleSub(appleSub);
+
+  if (!user) {
+    // `email` on the token is Apple's address (real or private-relay) and is present on
+    // every sign-in; the client only sends its own copy the very first time.
+    const email = claims.email || providedEmail || null;
+    // Only fold this Apple login into an existing account with the same email when Apple
+    // vouches that the address is verified — otherwise anyone could claim someone else's.
+    const emailVerified = claims.email_verified === true || claims.email_verified === 'true';
+    const existingByEmail = email && emailVerified ? await getUserByEmail(email) : null;
+
+    if (existingByEmail) {
+      user = await updateUser(existingByEmail.id, { appleSub });
+    } else {
+      const placeholderPassword = crypto.randomBytes(32).toString('hex');
+      const taken = email ? await getUserByEmail(email) : null;
+      user = await createUser({
+        email: email && !taken ? email : `apple-${appleSub}@docscanner.local`,
+        passwordHash: await hashPassword(placeholderPassword),
+        appleSub,
+      });
+    }
+  }
+
+  // Keep Apple's refresh token so it can be revoked if this account is deleted.
+  // Best effort: a failure here must never block signing in.
+  if (authorizationCode && isAppleRevocationConfigured()) {
+    try {
+      const appleRefreshToken = await exchangeAppleAuthorizationCode(authorizationCode);
+      if (appleRefreshToken) await updateUser(user.id, { appleRefreshToken });
+    } catch (err) {
+      console.error('Could not store Apple refresh token:', err.message);
+    }
+  }
+
+  setAuthCookie(req, res, user.id);
+  res.json({ email: user.email });
+});
+
 app.post('/api/logout', (req, res) => {
   clearAuthCookie(res);
   res.status(204).end();
@@ -74,6 +162,31 @@ app.post('/api/logout', (req, res) => {
 
 app.get('/api/me', requireAuthApi, (req, res) => {
   res.json({ id: req.user.id, email: req.user.email, isAdmin: req.user.isAdmin });
+});
+
+// Self-service account deletion (required by App Store guideline 5.1.1(v) for apps that
+// let people create accounts). Removes the user's saved scans too.
+app.delete('/api/me', requireAuthApi, async (req, res) => {
+  if (req.user.isAdmin) {
+    const admins = (await getAllUsers()).filter((u) => u.isAdmin);
+    if (admins.length <= 1) {
+      return res.status(400).json({
+        error: "You're the only admin, so this account can't be deleted. Make another account an admin first.",
+      });
+    }
+  }
+
+  if (req.user.appleRefreshToken && isAppleRevocationConfigured()) {
+    try {
+      await revokeAppleRefreshToken(req.user.appleRefreshToken);
+    } catch (err) {
+      console.error('Could not revoke Apple token:', err.message);
+    }
+  }
+
+  await deleteUser(req.user.id);
+  clearAuthCookie(res);
+  res.status(204).end();
 });
 
 // --- Scans ---

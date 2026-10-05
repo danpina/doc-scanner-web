@@ -12,3 +12,11 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
+      - key: APPLE_BUNDLE_ID
+        value: com.danipina.docscanner
+      - key: APPLE_TEAM_ID
+        sync: false
+      - key: APPLE_KEY_ID
+        sync: false
+      - key: APPLE_PRIVATE_KEY
+        sync: false
