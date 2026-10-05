@@ -17,6 +17,10 @@ This is an independent project from the native iOS `DocScanner` app — same ide
 
 All image processing (crop math, filters, PDF assembly) runs in the browser — photos never leave your phone unless you tap "Save to My Scans".
 
+## iOS app
+
+A native SwiftUI client for this same backend lives in [`ios/`](ios/README.md) — same accounts, same saved scans, same filters, plus Apple's document camera. It's built by GitHub Actions (there's no Mac), and shipped to TestFlight the same way as the other apps. See [`ios/README.md`](ios/README.md).
+
 ## Stack
 
 - **Backend**: Express (ESM), cookie/JWT auth (`auth.js`, `users.js` — same pattern as the vocab app), Turso/libsql for storage (falls back to a local SQLite file at `data/scanner.db` when `TURSO_DATABASE_URL` isn't set).
