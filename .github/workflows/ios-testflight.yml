@@ -52,6 +52,7 @@ jobs:
 
       - name: Archive
         run: |
+          set -o pipefail
           xcodebuild archive \
             -project DocScanner.xcodeproj \
             -scheme DocScanner \
@@ -63,7 +64,7 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            CURRENT_PROJECT_VERSION="${{ github.run_number }}"
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" 2>&1 | tee "$RUNNER_TEMP/archive.log"
 
       - name: Write export options
         run: |
@@ -83,6 +84,7 @@ jobs:
 
       - name: Export and upload to TestFlight
         run: |
+          set -o pipefail
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/DocScanner.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
@@ -90,7 +92,19 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath "$ASC_KEY_PATH" \
             -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" 2>&1 | tee "$RUNNER_TEMP/export.log"
+
+      # The raw log needs a GitHub login to download; annotations are visible on the run page
+      # (and via the public API). Signing/upload failures are usually explained in the last lines.
+      - name: Surface xcodebuild errors as annotations
+        if: failure()
+        run: |
+          for name in archive export; do
+            log="$RUNNER_TEMP/$name.log"
+            [ -f "$log" ] || continue
+            body=$(tail -n 40 "$log" | sed 's/%/%25/g' | awk 'BEGIN { ORS="%0A" } { print }')
+            echo "::error title=xcodebuild $name (last lines)::${body}"
+          done
 
       - name: Remove API key from runner
         if: always()

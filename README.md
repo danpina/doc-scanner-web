@@ -19,7 +19,7 @@ All image processing (crop math, filters, PDF assembly) runs in the browser — 
 
 ## iOS app
 
-A native SwiftUI client for this same backend lives in [`ios/`](ios/README.md) — same accounts, same saved scans, same filters, plus Apple's document camera. It's built by GitHub Actions (there's no Mac), and shipped to TestFlight the same way as the other apps. See [`ios/README.md`](ios/README.md).
+A native SwiftUI client for this same backend lives in [`ios/`](ios/README.md) — same accounts, same saved scans, same filters, plus Apple's document camera. It's built and shipped to TestFlight by GitHub Actions (there's no Mac needed) — the same approach as the older DocScanner repo, unlike the vocab app, which is archived from Xcode. See [`ios/README.md`](ios/README.md).
 
 ## Stack
 

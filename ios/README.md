@@ -54,16 +54,22 @@ The free Render plan sleeps when idle and takes up to a minute to wake, so the a
 
 ## Path to TestFlight
 
-1. In [App Store Connect](https://appstoreconnect.apple.com) → Apps → **+** → New App, using
-   bundle ID `com.danipina.docscanner` (it's registered automatically the first time a signed
-   archive is built; or register it under Certificates, Identifiers & Profiles first).
+1. Register the bundle ID `com.danipina.docscanner` at developer.apple.com → Certificates,
+   Identifiers & Profiles → Identifiers (no capabilities needed). Do this *first*: the "New
+   App" form in the next step only lists bundle IDs that already exist.
    The `DEVELOPMENT_TEAM` in `project.yml` is the same team as the Linguanest app.
-2. Add these four **repository secrets** to this repo (secrets don't carry over from the
-   other repos): `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` (the full
-   contents of the `AuthKey_XXXX.p8` file). Create the API key in App Store Connect → Users
-   and Access → Integrations → App Store Connect API.
-3. Actions → **iOS TestFlight** → Run workflow. The build number is the run number; the
-   build shows up in TestFlight a few minutes after the upload finishes processing.
+2. In [App Store Connect](https://appstoreconnect.apple.com) → Apps → **+** → New App, pick
+   that bundle ID. The app name must be unique across the whole store (it can be changed
+   before a public release); the SKU is any unique string.
+3. Add these four **repository secrets** to this repo (secrets don't carry over from the
+   other repos): `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` (paste the full
+   contents of the `AuthKey_XXXX.p8` file as text). Create the API key in App Store Connect →
+   Users and Access → Integrations → App Store Connect API. If the export step fails with a
+   cloud-signing permission error, the key's role is too low — recreate it with **Admin**.
+4. Actions → **iOS TestFlight** → Run workflow (the workflow file has to be on the default
+   branch for the button to appear). The build number is the run number; the build shows up in
+   TestFlight a few minutes after the upload finishes processing. If a run fails, the last
+   lines of the failing `xcodebuild` step are copied into the run's annotations.
 
 ## Before an App Store submission (not needed for TestFlight)
 
