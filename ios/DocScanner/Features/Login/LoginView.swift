@@ -8,6 +8,7 @@ struct LoginView: View {
     @State private var password = ""
     @State private var mode: Mode = .logIn
     @State private var isSubmitting = false
+    @State private var showForgotPassword = false
     @FocusState private var focusedField: Field?
 
     private enum Mode: String, CaseIterable {
@@ -35,6 +36,9 @@ struct LoginView: View {
                 .padding(.vertical, 28)
             }
             .scrollDismissesKeyboard(.interactively)
+        }
+        .sheet(isPresented: $showForgotPassword) {
+            ForgotPasswordView(email: email)
         }
     }
 
@@ -103,6 +107,14 @@ struct LoginView: View {
                     .focused($focusedField, equals: .password)
                     .submitLabel(.go)
                     .onSubmit { Task { await submit() } }
+            }
+
+            if mode == .logIn {
+                Button("Forgot password?") {
+                    showForgotPassword = true
+                }
+                .font(.footnote)
+                .frame(maxWidth: .infinity, alignment: .trailing)
             }
 
             if let error = session.errorMessage {

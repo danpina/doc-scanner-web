@@ -13,6 +13,7 @@ function rowToUser(row) {
     passwordHash: row.password_hash,
     isAdmin: !!row.is_admin,
     passwordSet: row.password_set !== 0,
+    sessionVersion: row.session_version ?? 0,
     appleSub: row.apple_sub,
     appleRefreshToken: row.apple_refresh_token,
     createdAt: row.created_at,
@@ -83,7 +84,18 @@ export async function updateUser(id, fields) {
   return getUserById(id);
 }
 
+/// Sets a new password (marking the account as having one) and bumps the session version, which
+/// signs out every device that was logged in with the old password. Returns the updated user.
+export async function setUserPassword(id, passwordHash) {
+  await client.execute({
+    sql: 'UPDATE users SET password_hash = ?, password_set = 1, session_version = session_version + 1 WHERE id = ?',
+    args: [passwordHash, id],
+  });
+  return getUserById(id);
+}
+
 export async function deleteUser(id) {
+  await client.execute({ sql: 'DELETE FROM password_resets WHERE user_id = ?', args: [id] });
   await client.execute({ sql: 'DELETE FROM scans WHERE user_id = ?', args: [id] });
   const result = await client.execute({ sql: 'DELETE FROM users WHERE id = ?', args: [id] });
   return result.rowsAffected > 0;

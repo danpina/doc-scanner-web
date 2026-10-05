@@ -52,10 +52,28 @@ async function init() {
     await client.execute('ALTER TABLE users ADD COLUMN password_set INTEGER NOT NULL DEFAULT 1');
   }
 
+  // Bumped whenever a password changes; login cookies carry the value they were issued with, so
+  // changing or resetting a password signs out every other device.
+  if (!(await columnExists('users', 'session_version'))) {
+    await client.execute('ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0');
+  }
+
   // Kept so the Apple token can be revoked if the account is deleted.
   if (!(await columnExists('users', 'apple_refresh_token'))) {
     await client.execute('ALTER TABLE users ADD COLUMN apple_refresh_token TEXT');
   }
+
+  // Emailed "forgot password" links. Only a hash of the token is stored, so a leaked
+  // database can't be used to reset anyone's password.
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS password_resets (
+      token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT NOT NULL
+    )
+  `);
 
   await client.execute(`
     CREATE TABLE IF NOT EXISTS scans (

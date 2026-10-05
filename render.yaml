@@ -20,3 +20,11 @@ services:
         sync: false
       - key: APPLE_PRIVATE_KEY
         sync: false
+      - key: EMAIL_PROVIDER
+        value: resend
+      - key: EMAIL_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: APP_BASE_URL
+        value: https://doc-scanner-web.onrender.com

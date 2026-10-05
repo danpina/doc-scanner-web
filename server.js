@@ -21,8 +21,12 @@ import {
   getAllUsers,
   createUser,
   updateUser,
+  setUserPassword,
   deleteUser,
 } from './users.js';
+import { createPasswordResetToken, consumePasswordResetToken, deletePasswordResetTokens } from './passwordResets.js';
+import { allow } from './rateLimit.js';
+import { isEmailConfigured, sendEmail, appBaseUrl, buildResetEmail } from './mailer.js';
 import {
   verifyAppleIdentityToken,
   isAppleRevocationConfigured,
@@ -52,6 +56,8 @@ function sendPage(res, file) {
 // --- Public pages ---
 app.get('/login.html', (req, res) => sendPage(res, 'login.html'));
 app.get('/register.html', (req, res) => sendPage(res, 'register.html'));
+app.get('/forgot-password.html', (req, res) => sendPage(res, 'forgot-password.html'));
+app.get('/reset-password.html', (req, res) => sendPage(res, 'reset-password.html'));
 
 // --- Gated pages ---
 app.get('/', requireAuthPage, (req, res) => sendPage(res, 'index.html'));
@@ -81,7 +87,7 @@ app.post('/api/login', async (req, res) => {
     return res.status(401).json({ error: 'Incorrect email/ID or password' });
   }
 
-  setAuthCookie(req, res, user.id);
+  setAuthCookie(req, res, user);
   res.json({ email: user.email });
 });
 
@@ -103,7 +109,7 @@ app.post('/api/register', async (req, res) => {
   if (existing) return res.status(409).json({ error: 'An account with that email already exists' });
 
   const user = await createUser({ email, passwordHash: await hashPassword(password) });
-  setAuthCookie(req, res, user.id);
+  setAuthCookie(req, res, user);
   res.status(201).json({ email: user.email });
 });
 
@@ -155,8 +161,67 @@ app.post('/api/auth/apple', async (req, res) => {
     }
   }
 
-  setAuthCookie(req, res, user.id);
+  setAuthCookie(req, res, user);
   res.json({ email: user.email });
+});
+
+// --- Forgot password (emailed link) ---
+
+// Always answers the same way whether or not the email has an account, so this can't be used to
+// find out who has one. The email itself is sent without waiting, so response time doesn't leak it either.
+app.post('/api/forgot-password', async (req, res) => {
+  const email = typeof req.body.email === 'string' ? req.body.email.trim() : '';
+  if (!EMAIL_PATTERN.test(email)) {
+    return res.status(400).json({ error: 'Enter a valid email address' });
+  }
+  if (!isEmailConfigured()) {
+    return res.status(503).json({
+      error: "Password reset by email isn't set up yet. Please contact support to get a temporary password.",
+    });
+  }
+
+  // This endpoint makes the server send email to arbitrary addresses, so it's rate limited three
+  // ways: per address (stops mailbombing one person), per IP, and overall (protects the quota).
+  const withinLimits =
+    allow(`forgot:email:${email.toLowerCase()}`, 3, 60 * 60 * 1000) &&
+    allow(`forgot:ip:${req.ip}`, 20, 15 * 60 * 1000) &&
+    allow('forgot:global', 200, 60 * 60 * 1000);
+  if (!withinLimits) {
+    return res.status(429).json({ error: 'Too many reset requests. Please try again in a while.' });
+  }
+
+  const user = await getUserByEmail(email);
+  if (user) {
+    const token = await createPasswordResetToken(user.id);
+    const link = `${appBaseUrl()}/reset-password.html?token=${encodeURIComponent(token)}`;
+    sendEmail({ to: user.email, ...buildResetEmail(link) }).catch((err) => {
+      console.error('Could not send password reset email:', err.message);
+    });
+  }
+  res.json({ ok: true });
+});
+
+app.post('/api/reset-password', async (req, res) => {
+  const { token, password } = req.body;
+  if (typeof token !== 'string' || !token || typeof password !== 'string' || !password) {
+    return res.status(400).json({ error: 'token and password are required' });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+  // Slow down anyone guessing tokens (they're 256-bit random, so this is belt and braces).
+  if (!allow(`reset:ip:${req.ip}`, 30, 15 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Too many attempts. Please try again in a while.' });
+  }
+
+  const userId = await consumePasswordResetToken(token);
+  if (!userId) {
+    return res.status(400).json({ error: 'This reset link is invalid or has expired. Please request a new one.' });
+  }
+
+  await setUserPassword(userId, await hashPassword(password));
+  await deletePasswordResetTokens(userId);
+  res.status(204).end();
 });
 
 app.post('/api/logout', (req, res) => {
@@ -193,7 +258,9 @@ app.post('/api/me/password', requireAuthApi, async (req, res) => {
     }
   }
 
-  await updateUser(req.user.id, { passwordHash: await hashPassword(newPassword), passwordSet: true });
+  // Changing the password signs out every other device; re-issue the cookie so this one stays in.
+  const updated = await setUserPassword(req.user.id, await hashPassword(newPassword));
+  setAuthCookie(req, res, updated);
   res.status(204).end();
 });
 
@@ -290,17 +357,16 @@ app.post('/api/admin/reset-password', requireAdminApi, async (req, res) => {
   if (!user) return res.status(404).json({ error: 'No account with that email' });
 
   const temporaryPassword = generateTemporaryPassword();
-  await updateUser(user.id, { passwordHash: await hashPassword(temporaryPassword), passwordSet: true });
+  await setUserPassword(user.id, await hashPassword(temporaryPassword));
   res.json({ email: user.email, temporaryPassword });
 });
 
 app.patch('/api/admin/users/:id', requireAdminApi, async (req, res) => {
   const { email, password, isAdmin } = req.body;
-  const fields = { email, isAdmin };
-  if (password) fields.passwordHash = await hashPassword(password);
 
-  const updated = await updateUser(req.params.id, fields);
+  let updated = await updateUser(req.params.id, { email, isAdmin });
   if (!updated) return res.status(404).json({ error: 'not found' });
+  if (password) updated = await setUserPassword(req.params.id, await hashPassword(password));
   res.json(toAdminUser(updated));
 });
 
@@ -315,6 +381,11 @@ app.delete('/api/admin/users/:id', requireAdminApi, async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Doc Scanner running at http://localhost:${PORT}`);
+  console.log(
+    isEmailConfigured()
+      ? 'Password reset email: configured'
+      : 'Password reset email: NOT configured (set EMAIL_PROVIDER, EMAIL_API_KEY, EMAIL_FROM); Forgot password will answer 503'
+  );
   const apple = describeAppleConfig();
   console.log(
     apple.revocationConfigured && apple.privateKeyUsable
