@@ -1,0 +1,56 @@
+name: iOS Build
+
+# Compile-checks the SwiftUI app in ios/ on a macOS runner (there's no local Mac).
+# Only runs when something under ios/ changes, so web-only pushes don't spend macOS minutes.
+on:
+  push:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-build.yml'
+  pull_request:
+    paths:
+      - 'ios/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Select newest available Xcode
+        run: |
+          LATEST=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -n1)
+          if [ -n "$LATEST" ]; then
+            sudo xcode-select -s "$LATEST/Contents/Developer"
+          fi
+          xcodebuild -version
+
+      - name: Build for iOS Simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project DocScanner.xcodeproj \
+            -scheme DocScanner \
+            -destination "generic/platform=iOS Simulator" \
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      # The raw log needs a GitHub login to download; annotations are visible on the run page
+      # (and via the public API), so surface the compiler errors there.
+      - name: Surface compiler errors as annotations
+        if: failure()
+        run: |
+          [ -f "$RUNNER_TEMP/build.log" ] || exit 0
+          grep -E '(^|[: ])error: ' "$RUNNER_TEMP/build.log" | sort -u | head -40 | while IFS= read -r line; do
+            escaped=$(printf '%s' "$line" | sed 's/%/%25/g')
+            echo "::error::${escaped}"
+          done
