@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign up — Doc Scanner</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="auth-main">
+    <h1>Doc Scanner</h1>
+    <p class="subtitle">Create an account to save your scans.</p>
+
+    <form id="registerForm" class="auth-form">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" autocomplete="username" required />
+
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" autocomplete="new-password" minlength="8" required />
+      <p class="muted">At least 8 characters.</p>
+
+      <button id="registerBtn" type="submit">Create account</button>
+      <p id="wakeHint" class="muted hidden">Waking up the server… this can take up to a minute the first time.</p>
+      <p id="error" class="error hidden"></p>
+    </form>
+
+    <p class="guest-link"><a href="login.html">Already have an account? Log in</a></p>
+    <p class="muted guest-note">By creating an account you agree to our <a href="privacy.html">Privacy Policy</a>.</p>
+  </main>
+
+  <script src="register.js"></script>
+</body>
+</html>

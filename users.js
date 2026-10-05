@@ -12,6 +12,8 @@ function rowToUser(row) {
     email: row.email,
     passwordHash: row.password_hash,
     isAdmin: !!row.is_admin,
+    appleSub: row.apple_sub,
+    appleRefreshToken: row.apple_refresh_token,
     createdAt: row.created_at,
   };
 }
@@ -29,18 +31,26 @@ export async function getUserById(id) {
   return result.rows[0] ? rowToUser(result.rows[0]) : null;
 }
 
+export async function getUserByAppleSub(appleSub) {
+  const result = await client.execute({
+    sql: 'SELECT * FROM users WHERE apple_sub = ?',
+    args: [appleSub],
+  });
+  return result.rows[0] ? rowToUser(result.rows[0]) : null;
+}
+
 export async function getAllUsers() {
   const result = await client.execute('SELECT * FROM users ORDER BY created_at ASC');
   return result.rows.map(rowToUser);
 }
 
-export async function createUser({ email, passwordHash, isAdmin = false }) {
+export async function createUser({ email, passwordHash, isAdmin = false, appleSub = null }) {
   const id = newId();
   const createdAt = new Date().toISOString();
   await client.execute({
-    sql: `INSERT INTO users (id, email, password_hash, is_admin, created_at)
-          VALUES (?, ?, ?, ?, ?)`,
-    args: [id, normalizeEmail(email), passwordHash, isAdmin ? 1 : 0, createdAt],
+    sql: `INSERT INTO users (id, email, password_hash, is_admin, apple_sub, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [id, normalizeEmail(email), passwordHash, isAdmin ? 1 : 0, appleSub, createdAt],
   });
   return getUserById(id);
 }
@@ -50,6 +60,8 @@ export async function updateUser(id, fields) {
     email: 'email',
     passwordHash: 'password_hash',
     isAdmin: 'is_admin',
+    appleSub: 'apple_sub',
+    appleRefreshToken: 'apple_refresh_token',
   };
 
   const sets = [];

@@ -21,6 +21,11 @@ export function newId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+async function columnExists(table, column) {
+  const result = await client.execute(`PRAGMA table_info(${table})`);
+  return result.rows.some((row) => row.name === column);
+}
+
 async function init() {
   await client.execute(`
     CREATE TABLE IF NOT EXISTS users (
@@ -31,6 +36,20 @@ async function init() {
       created_at TEXT NOT NULL
     )
   `);
+
+  // Stable Apple user identifier for accounts created via Sign in with Apple.
+  // Nullable — email/password and admin-created accounts never set it.
+  if (!(await columnExists('users', 'apple_sub'))) {
+    await client.execute('ALTER TABLE users ADD COLUMN apple_sub TEXT');
+    await client.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_apple_sub ON users(apple_sub) WHERE apple_sub IS NOT NULL'
+    );
+  }
+
+  // Kept so the Apple token can be revoked if the account is deleted.
+  if (!(await columnExists('users', 'apple_refresh_token'))) {
+    await client.execute('ALTER TABLE users ADD COLUMN apple_refresh_token TEXT');
+  }
 
   await client.execute(`
     CREATE TABLE IF NOT EXISTS scans (
