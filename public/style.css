@@ -482,3 +482,18 @@ main.app-main {
 .reset-password-input {
   width: 11rem;
 }
+
+.reset-result {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 10px;
+  background: #fff8e1;
+  border: 1px solid #f0d78c;
+}
+
+.reset-result code {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  user-select: all;
+}

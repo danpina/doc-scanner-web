@@ -4,6 +4,7 @@ struct SettingsView: View {
     @EnvironmentObject var session: SessionStore
     @Environment(\.dismiss) private var dismiss
 
+    @State private var showChangePassword = false
     @State private var confirmDelete = false
     @State private var isDeleting = false
     @State private var deleteError: String?
@@ -35,6 +36,15 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    // Accounts created with Sign in with Apple have no password to change.
+                    if session.user?.hasApple != true {
+                        Button {
+                            showChangePassword = true
+                        } label: {
+                            Label("Change password", systemImage: "key")
+                        }
+                    }
+
                     Button {
                         Task {
                             await session.logout()
@@ -97,6 +107,9 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showChangePassword) {
+                ChangePasswordView()
+            }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
