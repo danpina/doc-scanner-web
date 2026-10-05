@@ -203,10 +203,44 @@ createForm.addEventListener('submit', async (event) => {
   }
 });
 
+async function loadEmailStatus() {
+  const statusEl = document.getElementById('emailStatus');
+  const res = await authedFetch('/api/admin/email-status');
+  const status = await res.json();
+  if (status.problems.length > 0) {
+    statusEl.textContent = 'Not working: ' + status.problems.join('; ');
+    statusEl.className = 'error';
+    return;
+  }
+  statusEl.textContent = `Provider: ${status.provider} \u00b7 sending as ${status.senderName ? status.senderName + ' ' : ''}<${status.senderEmail}> \u00b7 links point to ${status.linksPointTo}`;
+  statusEl.className = 'muted';
+}
+
+document.getElementById('testEmailBtn').addEventListener('click', async (event) => {
+  const button = event.target;
+  const resultEl = document.getElementById('testEmailResult');
+  button.disabled = true;
+  resultEl.className = 'muted';
+  resultEl.textContent = 'Sending\u2026';
+  try {
+    const res = await authedFetch('/api/admin/test-email', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not send the test email');
+    resultEl.className = 'success';
+    resultEl.textContent = `Sent to ${data.sentTo}. Check that inbox (and spam).`;
+  } catch (err) {
+    resultEl.className = 'error';
+    resultEl.textContent = err.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
 async function init() {
   const me = await renderUserBar('userBar');
   currentUserId = me ? me.id : null;
   await loadUsers();
+  await loadEmailStatus();
 }
 
 init();
