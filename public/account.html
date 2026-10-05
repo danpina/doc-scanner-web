@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Account — Doc Scanner</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>👤 Account</h1>
+    <div class="user-bar" id="userBar"></div>
+  </header>
+
+  <main class="app-main">
+    <p><a href="index.html">← Back to my scans</a></p>
+
+    <section class="admin-panel">
+      <h2 id="passwordTitle">Change password</h2>
+      <p class="muted" id="passwordIntro"></p>
+
+      <form id="passwordForm" class="auth-form">
+        <div id="currentWrap" class="auth-form">
+          <label for="currentPassword">Current (or temporary) password</label>
+          <input type="password" id="currentPassword" autocomplete="current-password" />
+        </div>
+
+        <label for="newPassword">New password</label>
+        <input type="password" id="newPassword" autocomplete="new-password" minlength="8" required />
+
+        <label for="confirmPassword">Repeat new password</label>
+        <input type="password" id="confirmPassword" autocomplete="new-password" minlength="8" required />
+        <p class="muted">At least 8 characters.</p>
+
+        <button id="saveBtn" type="submit">Change password</button>
+        <p id="message" class="error hidden"></p>
+        <p id="success" class="success hidden"></p>
+      </form>
+    </section>
+  </main>
+
+  <script src="common.js"></script>
+  <script src="account.js"></script>
+</body>
+</html>

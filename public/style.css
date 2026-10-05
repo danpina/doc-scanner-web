@@ -497,3 +497,20 @@ main.app-main {
   letter-spacing: 0.05em;
   user-select: all;
 }
+
+.success {
+  color: #1a7f37;
+  font-weight: 600;
+}
+
+.user-bar {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* On a phone the header runs out of room; the email is the least useful part of it. */
+@media (max-width: 520px) {
+  .user-bar .muted {
+    display: none;
+  }
+}
