@@ -31,7 +31,8 @@ Mirrors the website's features:
 - **Log in, Sign up and Sign in with Apple** (`/api/login`, `/api/register`, `/api/auth/apple`;
   cookie session persisted by `URLSession`), plus **Continue as Guest** — the whole scan →
   crop → filter → export flow, minus saving to an account.
-- **Settings** (tap your avatar on My Scans) — log out, privacy/support links, and
+- **Settings** (tap your avatar on My Scans) — **Change password** (hidden for Sign in with
+  Apple accounts), log out, privacy/support links, and
   **Delete account**, which removes the account and every saved scan (and revokes the Apple
   token for Sign in with Apple accounts, once the Apple key is configured — see below).
 - **Scan** with Apple's document camera (VisionKit — auto edge detection and flattening),

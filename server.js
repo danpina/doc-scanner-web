@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import {
   hashPassword,
   verifyPassword,
+  generateTemporaryPassword,
   setAuthCookie,
   clearAuthCookie,
   requireAuthApi,
@@ -161,7 +162,34 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/me', requireAuthApi, (req, res) => {
-  res.json({ id: req.user.id, email: req.user.email, isAdmin: req.user.isAdmin });
+  res.json({
+    id: req.user.id,
+    email: req.user.email,
+    isAdmin: req.user.isAdmin,
+    // Apple accounts have a random placeholder password nobody knows, so the app hides
+    // "Change password" for them.
+    hasApple: !!req.user.appleSub,
+  });
+});
+
+app.post('/api/me/password', requireAuthApi, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'currentPassword and newPassword are required' });
+  }
+  if (req.user.appleSub) {
+    return res.status(400).json({ error: "Accounts that sign in with Apple don't have a password." });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+  // 403, not 401: the clients treat 401 as "your session ended" and bounce to the login screen.
+  if (!(await verifyPassword(currentPassword, req.user.passwordHash))) {
+    return res.status(403).json({ error: 'Your current password is incorrect' });
+  }
+
+  await updateUser(req.user.id, { passwordHash: await hashPassword(newPassword) });
+  res.status(204).end();
 });
 
 // Self-service account deletion (required by App Store guideline 5.1.1(v) for apps that
@@ -240,6 +268,20 @@ app.post('/api/admin/users', requireAdminApi, async (req, res) => {
 
   const user = await createUser({ email, passwordHash: await hashPassword(password), isAdmin: !!isAdmin });
   res.status(201).json(toAdminUser(user));
+});
+
+// Generates a one-time temporary password for the account with this email. The admin passes
+// it on to the person, who can then change it in the app (Settings > Change password).
+app.post('/api/admin/reset-password', requireAdminApi, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'email is required' });
+
+  const user = await getUserByEmail(email);
+  if (!user) return res.status(404).json({ error: 'No account with that email' });
+
+  const temporaryPassword = generateTemporaryPassword();
+  await updateUser(user.id, { passwordHash: await hashPassword(temporaryPassword) });
+  res.json({ email: user.email, temporaryPassword });
 });
 
 app.patch('/api/admin/users/:id', requireAdminApi, async (req, res) => {

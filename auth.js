@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { getUserById } from './users.js';
 
@@ -18,6 +19,18 @@ export function hashPassword(password) {
 
 export function verifyPassword(password, hash) {
   return bcrypt.compare(password, hash);
+}
+
+// No look-alike characters (0/O, 1/l/I) so a temporary password survives being read out loud
+// or retyped from a message.
+const TEMP_PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+
+export function generateTemporaryPassword(length = 12) {
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    password += TEMP_PASSWORD_ALPHABET[crypto.randomInt(TEMP_PASSWORD_ALPHABET.length)];
+  }
+  return password;
 }
 
 export function setAuthCookie(req, res, userId) {

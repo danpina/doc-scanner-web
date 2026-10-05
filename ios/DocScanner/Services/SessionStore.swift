@@ -94,6 +94,23 @@ final class SessionStore: ObservableObject {
         isGuest = true
     }
 
+    /// Returns an error message on failure, nil on success.
+    func changePassword(current: String, new: String) async -> String? {
+        do {
+            struct ChangeBody: Encodable {
+                let currentPassword: String
+                let newPassword: String
+            }
+            try await APIClient.shared.sendNoContent(
+                "/api/me/password", method: .post,
+                body: ChangeBody(currentPassword: current, newPassword: new)
+            )
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     /// Permanently deletes the signed-in account (saved scans included). Returns an error
     /// message on failure, nil on success.
     func deleteAccount() async -> String? {

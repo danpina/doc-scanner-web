@@ -32,6 +32,22 @@
     </section>
 
     <section class="admin-panel">
+      <h2>Reset a password</h2>
+      <p class="muted">Creates a one-time temporary password for the account with this email. Pass it on to the person; they can change it in the app under Settings &rarr; Change password. (You can also use the Reset button on a user below.)</p>
+      <form id="resetForm" class="auth-form">
+        <label for="resetEmail">Email</label>
+        <input type="text" id="resetEmail" required />
+        <button id="resetBtn" type="submit">Reset password</button>
+        <p id="resetError" class="error hidden"></p>
+      </form>
+      <div id="resetResult" class="reset-result hidden">
+        <p>Temporary password for <strong id="resetResultEmail"></strong>:</p>
+        <p><code id="resetResultPassword"></code> <button id="copyResultBtn" type="button">Copy</button></p>
+        <p class="muted">Shown once &mdash; it can't be looked up later. Anyone with this password can log in as that user until they change it.</p>
+      </div>
+    </section>
+
+    <section class="admin-panel">
       <h2>Users</h2>
       <table class="admin-table">
         <thead>

@@ -3,7 +3,57 @@ const createBtn = document.getElementById('createBtn');
 const createError = document.getElementById('createError');
 const userRows = document.getElementById('userRows');
 
+const resetForm = document.getElementById('resetForm');
+const resetBtn = document.getElementById('resetBtn');
+const resetError = document.getElementById('resetError');
+const resetResult = document.getElementById('resetResult');
+
 let currentUserId = null;
+
+// Shared by the "Reset a password" form and the Reset button on each user row.
+async function resetPasswordFor(email) {
+  resetError.classList.add('hidden');
+  resetResult.classList.add('hidden');
+
+  const res = await authedFetch('/api/admin/reset-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    resetError.textContent = data.error || 'Could not reset the password';
+    resetError.classList.remove('hidden');
+    resetError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  document.getElementById('resetResultEmail').textContent = data.email;
+  document.getElementById('resetResultPassword').textContent = data.temporaryPassword;
+  resetResult.classList.remove('hidden');
+  resetResult.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+resetForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  resetBtn.disabled = true;
+  try {
+    await resetPasswordFor(document.getElementById('resetEmail').value.trim());
+  } finally {
+    resetBtn.disabled = false;
+  }
+});
+
+document.getElementById('copyResultBtn').addEventListener('click', async (event) => {
+  const text = document.getElementById('resetResultPassword').textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    event.target.textContent = 'Copied';
+  } catch {
+    event.target.textContent = 'Select and copy it manually';
+  }
+  setTimeout(() => { event.target.textContent = 'Copy'; }, 2000);
+});
 
 async function loadUsers() {
   const res = await authedFetch('/api/admin/users');
@@ -44,6 +94,10 @@ function renderViewRow(tr, user) {
   editBtn.textContent = 'Edit';
   editBtn.addEventListener('click', () => renderEditRow(tr, user));
 
+  const resetPasswordBtn = document.createElement('button');
+  resetPasswordBtn.textContent = 'Reset password';
+  armConfirm(resetPasswordBtn, 'Sure?', () => resetPasswordFor(user.email));
+
   const deleteBtn = document.createElement('button');
   deleteBtn.textContent = 'Delete';
   if (user.id === currentUserId) {
@@ -61,7 +115,7 @@ function renderViewRow(tr, user) {
     });
   }
 
-  actionsTd.append(editBtn, deleteBtn);
+  actionsTd.append(editBtn, resetPasswordBtn, deleteBtn);
   tr.append(emailTd, adminTd, createdTd, actionsTd);
 }
 
