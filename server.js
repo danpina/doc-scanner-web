@@ -26,7 +26,14 @@ import {
 } from './users.js';
 import { createPasswordResetToken, consumePasswordResetToken, deletePasswordResetTokens } from './passwordResets.js';
 import { allow } from './rateLimit.js';
-import { isEmailConfigured, sendEmail, appBaseUrl, buildResetEmail } from './mailer.js';
+import {
+  isEmailConfigured,
+  describeEmailConfig,
+  sendEmail,
+  appBaseUrl,
+  buildResetEmail,
+  buildTestEmail,
+} from './mailer.js';
 import {
   verifyAppleIdentityToken,
   isAppleRevocationConfigured,
@@ -347,6 +354,29 @@ app.get('/api/admin/apple-status', requireAdminApi, (req, res) => {
   res.json(describeAppleConfig());
 });
 
+// What the server makes of the email settings (never the API key), so a typo in a dashboard
+// value is visible without digging through logs.
+app.get('/api/admin/email-status', requireAdminApi, (req, res) => {
+  res.json(describeEmailConfig());
+});
+
+// Sends a test email to the logged-in admin and returns the provider's real answer, so a
+// rejected sender or key shows up right in the admin page instead of only in the server logs.
+app.post('/api/admin/test-email', requireAdminApi, async (req, res) => {
+  const config = describeEmailConfig();
+  if (config.problems.length > 0) return res.status(400).json({ error: config.problems.join('; ') });
+  if (!allow(`test-email:${req.user.id}`, 10, 60 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Too many test emails. Try again later.' });
+  }
+
+  try {
+    await sendEmail({ to: req.user.email, ...buildTestEmail() });
+    res.json({ ok: true, sentTo: req.user.email });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
 // Generates a one-time temporary password for the account with this email. The admin passes
 // it on to the person, who can then change it in the app (Settings > Change password).
 app.post('/api/admin/reset-password', requireAdminApi, async (req, res) => {
@@ -381,10 +411,11 @@ app.delete('/api/admin/users/:id', requireAdminApi, async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Doc Scanner running at http://localhost:${PORT}`);
+  const email = describeEmailConfig();
   console.log(
-    isEmailConfigured()
-      ? 'Password reset email: configured'
-      : 'Password reset email: NOT configured (set EMAIL_PROVIDER, EMAIL_API_KEY, EMAIL_FROM); Forgot password will answer 503'
+    email.problems.length === 0
+      ? `Password reset email: configured (${email.provider}, sending as ${email.senderEmail})`
+      : `Password reset email: NOT working (${email.problems.join('; ')}); Forgot password will answer 503`
   );
   const apple = describeAppleConfig();
   console.log(

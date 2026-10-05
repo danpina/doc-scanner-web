@@ -1,13 +1,30 @@
 // Sends transactional email through a provider's HTTPS API. (Render's free plan blocks the SMTP
 // ports, so plain SMTP isn't an option there.) Pick the provider with EMAIL_PROVIDER.
-//   resend (default): needs a verified sending domain to reach anyone but your own account.
-//   brevo: can send after verifying a single sender address, no domain required.
+//   resend: needs a verified sending domain to reach anyone but your own account.
+//   brevo:  can send after verifying a single sender address, no domain required.
 
-function parseFrom(from) {
-  const match = /^(.*)<([^>]+)>\s*$/.exec(from);
-  return match
-    ? { name: match[1].trim().replace(/^"|"$/g, ''), email: match[2].trim() }
-    : { name: '', email: from.trim() };
+/// Pulls the sender out of EMAIL_FROM however it was typed: `Doc Scanner <me@example.com>`, a bare
+/// address, or either of those wrapped in quotation marks (easy to do in a hosting dashboard).
+/// Returns { name, email }, or null if there's no email address in it at all.
+export function parseSender(from) {
+  const cleaned = String(from ?? '')
+    .trim()
+    .replace(/^['"“”]+|['"“”]+$/g, '')
+    .trim();
+  const match = /[^\s<>"',;]+@[^\s<>"',;]+\.[^\s<>"',;]+/.exec(cleaned);
+  if (!match) return null;
+
+  const email = match[0];
+  const name = cleaned
+    .replace(/<[^>]*>/g, '')
+    .replace(email, '')
+    .replace(/['"“”]/g, '')
+    .trim();
+  return { name, email };
+}
+
+function formatSender({ name, email }) {
+  return name ? `${name} <${email}>` : email;
 }
 
 async function ensureOk(response, provider) {
@@ -16,17 +33,16 @@ async function ensureOk(response, provider) {
 }
 
 const PROVIDERS = {
-  async resend({ apiKey, from, to, subject, text, html }) {
+  async resend({ apiKey, sender, to, subject, text, html }) {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [to], subject, text, html }),
+      body: JSON.stringify({ from: formatSender(sender), to: [to], subject, text, html }),
     });
     await ensureOk(response, 'Resend');
   },
 
-  async brevo({ apiKey, from, to, subject, text, html }) {
-    const sender = parseFrom(from);
+  async brevo({ apiKey, sender, to, subject, text, html }) {
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
       headers: { 'api-key': apiKey, 'Content-Type': 'application/json', accept: 'application/json' },
@@ -43,20 +59,45 @@ const PROVIDERS = {
 };
 
 export function emailProvider() {
-  return (process.env.EMAIL_PROVIDER || 'resend').toLowerCase();
+  return (process.env.EMAIL_PROVIDER || 'resend').trim().toLowerCase();
+}
+
+/// What the server makes of the email settings, for the admin status page and the startup log.
+/// Never includes the API key itself.
+export function describeEmailConfig() {
+  const provider = emailProvider();
+  const sender = parseSender(process.env.EMAIL_FROM);
+  const problems = [];
+
+  if (!PROVIDERS[provider]) problems.push(`Unknown EMAIL_PROVIDER "${provider}" (use resend or brevo)`);
+  if (!process.env.EMAIL_API_KEY) problems.push('EMAIL_API_KEY is not set');
+  if (!process.env.EMAIL_FROM) {
+    problems.push('EMAIL_FROM is not set');
+  } else if (!sender) {
+    problems.push('EMAIL_FROM contains no email address (write it like: Doc Scanner <you@example.com>)');
+  }
+
+  return {
+    provider,
+    apiKeySet: Boolean(process.env.EMAIL_API_KEY),
+    senderName: sender?.name || null,
+    senderEmail: sender?.email ?? null,
+    linksPointTo: appBaseUrl(),
+    problems,
+  };
 }
 
 export function isEmailConfigured() {
-  return Boolean(process.env.EMAIL_API_KEY && process.env.EMAIL_FROM && PROVIDERS[emailProvider()]);
+  return describeEmailConfig().problems.length === 0;
 }
 
 export async function sendEmail({ to, subject, text, html }) {
-  if (!isEmailConfigured()) {
-    throw new Error('Email is not configured (EMAIL_PROVIDER / EMAIL_API_KEY / EMAIL_FROM)');
-  }
-  await PROVIDERS[emailProvider()]({
-    apiKey: process.env.EMAIL_API_KEY,
-    from: process.env.EMAIL_FROM,
+  const config = describeEmailConfig();
+  if (config.problems.length > 0) throw new Error(`Email is not configured: ${config.problems.join('; ')}`);
+
+  await PROVIDERS[config.provider]({
+    apiKey: process.env.EMAIL_API_KEY.trim(),
+    sender: parseSender(process.env.EMAIL_FROM),
     to,
     subject,
     text,
@@ -68,7 +109,7 @@ export async function sendEmail({ to, subject, text, html }) {
 /// request's Host header: that would let an attacker make the emailed reset link point at their
 /// own domain ("reset poisoning").
 export function appBaseUrl() {
-  return (process.env.APP_BASE_URL || 'https://doc-scanner-web.onrender.com').replace(/\/+$/, '');
+  return (process.env.APP_BASE_URL || 'https://doc-scanner-web.onrender.com').trim().replace(/\/+$/, '');
 }
 
 export function buildResetEmail(link) {
@@ -87,4 +128,12 @@ export function buildResetEmail(link) {
 <p style="color:#666">If that wasn't you, ignore this email &mdash; your password stays the same.</p>`;
 
   return { subject: 'Reset your Doc Scanner password', text, html };
+}
+
+export function buildTestEmail() {
+  return {
+    subject: 'Doc Scanner test email',
+    text: 'This is a test email from your Doc Scanner server. If you can read this, password reset emails will work.',
+    html: '<p>This is a test email from your <strong>Doc Scanner</strong> server.</p><p>If you can read this, password reset emails will work.</p>',
+  };
 }
