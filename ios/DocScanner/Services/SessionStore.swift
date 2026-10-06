@@ -11,7 +11,14 @@ final class SessionStore: ObservableObject {
 
     init() {
         APIClient.shared.onUnauthorized = { [weak self] in
-            Task { @MainActor in self?.user = nil }
+            Task { @MainActor in
+                // Only explain it if someone was actually signed in; on a fresh launch the
+                // first /api/me check is expected to say "not logged in".
+                if self?.user != nil {
+                    self?.errorMessage = "Your session has ended. Please log in again."
+                }
+                self?.user = nil
+            }
         }
     }
 
@@ -28,6 +35,21 @@ final class SessionStore: ObservableObject {
         }
     }
 
+    /// Runs right after the server accepted a log-in/sign-up/Apple request. The session cookie
+    /// should now authenticate `/api/me`; if it doesn't, say so instead of silently staying on the
+    /// login screen.
+    private func finishSignIn() async -> Bool {
+        do {
+            user = try await APIClient.shared.send("/api/me", method: .get)
+            isGuest = false
+            return true
+        } catch {
+            user = nil
+            errorMessage = "The server accepted your details, but the app couldn't open your account (\(error.localizedDescription)). Please try again."
+            return false
+        }
+    }
+
     func login(email: String, password: String) async -> Bool {
         errorMessage = nil
         do {
@@ -39,9 +61,7 @@ final class SessionStore: ObservableObject {
                 "/api/login", method: .post,
                 body: LoginBody(email: email, password: password)
             )
-            await refreshMe()
-            if user != nil { isGuest = false }
-            return user != nil
+            return await finishSignIn()
         } catch {
             errorMessage = error.localizedDescription
             return false
@@ -59,9 +79,7 @@ final class SessionStore: ObservableObject {
                 "/api/register", method: .post,
                 body: RegisterBody(email: email, password: password)
             )
-            await refreshMe()
-            if user != nil { isGuest = false }
-            return user != nil
+            return await finishSignIn()
         } catch {
             errorMessage = error.localizedDescription
             return false
@@ -80,9 +98,7 @@ final class SessionStore: ObservableObject {
                 "/api/auth/apple", method: .post,
                 body: AppleBody(identityToken: identityToken, authorizationCode: authorizationCode, email: email)
             )
-            await refreshMe()
-            if user != nil { isGuest = false }
-            return user != nil
+            return await finishSignIn()
         } catch {
             errorMessage = error.localizedDescription
             return false
