@@ -122,11 +122,20 @@ final class SessionStore: ObservableObject {
                 "/api/me/password", method: .post,
                 body: ChangeBody(currentPassword: current, newPassword: new)
             )
-            await refreshMe()
-            return nil
         } catch {
             return error.localizedDescription
         }
+
+        // The password is changed. The server also re-issued this device's session; reload the
+        // account to pick up `hasPassword`. If that fails, don't call the change a failure —
+        // send the person to the login screen and tell them to use the new password.
+        do {
+            user = try await APIClient.shared.send("/api/me", method: .get)
+        } catch {
+            user = nil
+            errorMessage = "Your password was changed, but this device couldn't stay logged in. Please log in with your new password."
+        }
+        return nil
     }
 
     /// Permanently deletes the signed-in account (saved scans included). Returns an error

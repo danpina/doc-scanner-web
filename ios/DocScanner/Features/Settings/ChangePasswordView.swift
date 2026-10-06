@@ -11,6 +11,7 @@ struct ChangePasswordView: View {
     @State private var confirm = ""
     @State private var isSaving = false
     @State private var errorMessage: String?
+    @State private var showSuccess = false
 
     /// An account that has no password yet doesn't need to prove a current one.
     private var requiresCurrent: Bool {
@@ -89,6 +90,11 @@ struct ChangePasswordView: View {
                 }
             }
             .keyboardDismissible()
+            .alert("Password updated", isPresented: $showSuccess) {
+                Button("OK") { dismiss() }
+            } message: {
+                Text("Use your new password the next time you log in. Your other devices have been logged out.")
+            }
         }
     }
 
@@ -102,7 +108,7 @@ struct ChangePasswordView: View {
             errorMessage = error
         } else {
             Haptics.success()
-            dismiss()
+            showSuccess = true
         }
     }
 }
