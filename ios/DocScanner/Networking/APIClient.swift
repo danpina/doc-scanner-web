@@ -51,6 +51,25 @@ final class APIClient {
         return request
     }
 
+    /// Runs the request and turns connectivity failures into messages a person can act on,
+    /// instead of surfacing raw URLSession text.
+    private func perform(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        do {
+            return try await URLSession.shared.data(for: request)
+        } catch let error as URLError {
+            switch error.code {
+            case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed:
+                throw APIError(message: "You're offline. Check your connection and try again.")
+            case .timedOut, .cannotConnectToHost, .cannotFindHost:
+                throw APIError(message: "Couldn't reach the server. It may be waking up — wait a minute and try again.")
+            case .secureConnectionFailed, .serverCertificateUntrusted:
+                throw APIError(message: "Couldn't make a secure connection to the server.")
+            default:
+                throw APIError(message: "Network problem: \(error.localizedDescription)")
+            }
+        }
+    }
+
     @discardableResult
     func send<Response: Decodable>(
         _ path: String,
@@ -58,9 +77,13 @@ final class APIClient {
         body: Encodable? = nil
     ) async throws -> Response {
         let request = try makeRequest(path, method: method, body: body)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await perform(request)
         try validate(response, data: data)
-        return try decoder.decode(Response.self, from: data)
+        do {
+            return try decoder.decode(Response.self, from: data)
+        } catch {
+            throw APIError(message: "The server sent a reply the app couldn't read. Please try again.")
+        }
     }
 
     func sendNoContent(
@@ -69,31 +92,36 @@ final class APIClient {
         body: Encodable? = nil
     ) async throws {
         let request = try makeRequest(path, method: method, body: body)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await perform(request)
         try validate(response, data: data)
     }
 
     /// Raw bytes — used to download a saved PDF.
     func fetchData(_ path: String) async throws -> Data {
         let request = try makeRequest(path, method: .get, body: nil, accept: "application/pdf")
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await perform(request)
         try validate(response, data: data)
         return data
     }
+
+    /// These answer 401 for "wrong email/password" or a bad Apple credential — not for an ended session.
+    private static let credentialPaths: Set<String> = ["/api/login", "/api/register", "/api/auth/apple"]
 
     private func validate(_ response: URLResponse, data: Data) throws {
         guard let http = response as? HTTPURLResponse else {
             throw APIError(message: "No response from server.")
         }
+        let serverMessage = (try? decoder.decode(ServerErrorBody.self, from: data))?.error
+
         if http.statusCode == 401 {
+            if Self.credentialPaths.contains(http.url?.path ?? "") {
+                throw APIError(message: serverMessage ?? "Incorrect email or password.")
+            }
             onUnauthorized?()
-            throw APIError(message: "Not logged in")
+            throw APIError(message: "Your session has ended. Please log in again.")
         }
         guard (200...299).contains(http.statusCode) else {
-            if let decoded = try? decoder.decode(ServerErrorBody.self, from: data) {
-                throw APIError(message: decoded.error)
-            }
-            throw APIError(message: "Request failed (\(http.statusCode)).")
+            throw APIError(message: serverMessage ?? "Request failed (\(http.statusCode)).")
         }
     }
 }
