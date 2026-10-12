@@ -36,6 +36,7 @@ const MAX_PREVIEW_DIM = 900; // editor crop UI works on a smaller preview for sm
 
 const pageGrid = document.getElementById('pageGrid');
 const noPagesEl = document.getElementById('noPages');
+const reorderHintEl = document.getElementById('reorderHint');
 const exportBtn = document.getElementById('exportBtn');
 const cancelBtn = document.getElementById('cancelBtn');
 const spinner = document.getElementById('spinner');
@@ -216,13 +217,16 @@ function renderPages() {
   noPagesEl.classList.toggle('hidden', pages.length > 0);
   exportBtn.disabled = pages.length === 0;
   document.getElementById('allFilterBar').classList.toggle('hidden', pages.length === 0);
+  reorderHintEl.classList.toggle('hidden', pages.length < 2);
 
   pages.forEach((page, index) => {
     const thumb = document.createElement('div');
     thumb.className = 'page-thumb';
+    thumb.dataset.index = index;
 
     const img = document.createElement('img');
     img.src = page.processedDataUrl;
+    img.draggable = false; // the page drag below replaces the browser's own image drag
     img.addEventListener('click', () => openEditor(index));
 
     const num = document.createElement('span');
@@ -264,6 +268,175 @@ function renderPages() {
     pageGrid.append(thumb);
   });
 }
+
+// --- Drag a page to a new position ---
+// Touch: press and HOLD a page until it lifts, then drag it onto another page. Moving the finger
+// before it lifts counts as scrolling, so a slight touch or a swipe never reorders anything.
+// Mouse: press and drag. Either way the page only moves when it is dropped on another page.
+
+const HOLD_MS = 450;         // touch: how long to hold before the page lifts
+const HOLD_SLOP = 10;        // touch: moving further than this before the hold ends = scrolling
+const MOUSE_DRAG_SLOP = 6;   // mouse: pixels to move before a press becomes a drag
+const EDGE_SCROLL_ZONE = 70; // px from the top/bottom of the screen where dragging auto-scrolls
+
+let reorder = null; // the press/drag in progress, if any
+let suppressNextClick = false;
+
+function movePage(from, to) {
+  if (from === to || from < 0 || to < 0 || from >= pages.length || to >= pages.length) return;
+  const [page] = pages.splice(from, 1);
+  pages.splice(to, 0, page); // the page takes the dropped-on page's position
+  renderPages();
+}
+
+function startReorder() {
+  const r = reorder;
+  if (!r || r.active) return;
+  clearTimeout(r.timer);
+  r.active = true;
+
+  const rect = r.thumb.getBoundingClientRect();
+  r.offsetX = r.startX - rect.left;
+  r.offsetY = r.startY - rect.top;
+
+  const ghost = r.thumb.cloneNode(true);
+  ghost.classList.add('drag-ghost');
+  ghost.style.width = `${rect.width}px`;
+  ghost.style.height = `${rect.height}px`;
+  document.body.append(ghost);
+  r.ghost = ghost;
+
+  r.thumb.classList.add('dragging');
+  document.body.classList.add('is-reordering');
+  if (navigator.vibrate) navigator.vibrate(12);
+
+  updateReorder();
+  r.raf = requestAnimationFrame(autoScrollTick);
+}
+
+function updateReorder() {
+  const r = reorder;
+  if (!r || !r.active) return;
+  r.ghost.style.left = `${r.x - r.offsetX}px`;
+  r.ghost.style.top = `${r.y - r.offsetY}px`;
+
+  const el = document.elementFromPoint(r.x, r.y); // the ghost ignores pointer events
+  const over = el ? el.closest('.page-thumb') : null;
+  const target = over && over !== r.thumb && pageGrid.contains(over) ? over : null;
+  if (target !== r.target) {
+    if (r.target) r.target.classList.remove('drop-target');
+    if (target) target.classList.add('drop-target');
+    r.target = target;
+  }
+}
+
+// Keep scrolling while a page is held near the top/bottom edge, so far-away pages are reachable.
+function autoScrollTick() {
+  const r = reorder;
+  if (!r || !r.active) return;
+  const vh = window.innerHeight;
+  let dy = 0;
+  if (r.y < EDGE_SCROLL_ZONE) dy = -Math.ceil((EDGE_SCROLL_ZONE - r.y) / 6);
+  else if (r.y > vh - EDGE_SCROLL_ZONE) dy = Math.ceil((r.y - (vh - EDGE_SCROLL_ZONE)) / 6);
+  if (dy) {
+    window.scrollBy(0, dy);
+    updateReorder();
+  }
+  r.raf = requestAnimationFrame(autoScrollTick);
+}
+
+function endReorder(commit) {
+  const r = reorder;
+  if (!r) return;
+  reorder = null;
+  clearTimeout(r.timer);
+  cancelAnimationFrame(r.raf);
+  if (!r.active) return;
+
+  if (r.ghost) r.ghost.remove();
+  r.thumb.classList.remove('dragging');
+  if (r.target) r.target.classList.remove('drop-target');
+  document.body.classList.remove('is-reordering');
+
+  // The release would otherwise count as a click and open the editor.
+  suppressNextClick = true;
+  setTimeout(() => { suppressNextClick = false; }, 60);
+
+  if (commit && r.target) movePage(r.from, Number(r.target.dataset.index));
+}
+
+pageGrid.addEventListener('pointerdown', (e) => {
+  if (reorder || pages.length < 2) return;
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  const thumb = e.target.closest('.page-thumb');
+  if (!thumb || e.target.closest('.page-controls')) return; // the buttons keep working as buttons
+
+  reorder = {
+    thumb,
+    from: Number(thumb.dataset.index),
+    pointerId: e.pointerId,
+    type: e.pointerType,
+    startX: e.clientX,
+    startY: e.clientY,
+    x: e.clientX,
+    y: e.clientY,
+    active: false,
+    ghost: null,
+    target: null,
+    timer: null,
+    raf: 0,
+  };
+  if (e.pointerType !== 'mouse') reorder.timer = setTimeout(startReorder, HOLD_MS);
+});
+
+window.addEventListener('pointermove', (e) => {
+  const r = reorder;
+  if (!r || e.pointerId !== r.pointerId) return;
+  r.x = e.clientX;
+  r.y = e.clientY;
+
+  if (!r.active) {
+    const moved = Math.hypot(r.x - r.startX, r.y - r.startY);
+    if (r.type === 'mouse') {
+      if (moved > MOUSE_DRAG_SLOP) startReorder();
+    } else if (moved > HOLD_SLOP) {
+      endReorder(false); // the finger moved before the hold finished: this is a scroll
+    }
+    return;
+  }
+  e.preventDefault();
+  updateReorder();
+});
+
+window.addEventListener('pointerup', (e) => {
+  if (reorder && e.pointerId === reorder.pointerId) endReorder(true);
+});
+window.addEventListener('pointercancel', (e) => {
+  if (reorder && e.pointerId === reorder.pointerId) endReorder(false);
+});
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') endReorder(false);
+});
+window.addEventListener('blur', () => endReorder(false));
+
+// Once a page has lifted, the finger must not also scroll the screen. This has to be a
+// non-passive listener or the browser ignores preventDefault.
+document.addEventListener('touchmove', (e) => {
+  if (reorder && reorder.active) e.preventDefault();
+}, { passive: false });
+
+// A press-and-hold on a phone would otherwise open the image menu / select text.
+pageGrid.addEventListener('contextmenu', (e) => {
+  if (reorder) e.preventDefault();
+});
+pageGrid.addEventListener('dragstart', (e) => e.preventDefault());
+
+pageGrid.addEventListener('click', (e) => {
+  if (suppressNextClick) {
+    e.stopPropagation();
+    e.preventDefault();
+  }
+}, true);
 
 document.getElementById('applyAllFilterBtn').addEventListener('click', () => {
   const filter = document.getElementById('allFilterSelect').value;

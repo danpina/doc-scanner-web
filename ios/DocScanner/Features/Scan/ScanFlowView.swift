@@ -22,6 +22,7 @@ struct ScanFlowView: View {
     @State private var exportItem: ExportItem?
     @State private var allFilter: PageFilter = .original
     @State private var confirmLeave = false
+    @State private var dropTargetID: UUID?
 
     private struct EditTarget: Identifiable {
         let id: UUID
@@ -273,30 +274,63 @@ struct ScanFlowView: View {
     }
 
     private var pageGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 12)], spacing: 12) {
-            ForEach(Array(scan.pages.enumerated()), id: \.element.id) { index, page in
-                PageThumb(
-                    page: page,
-                    index: index,
-                    count: scan.pages.count,
-                    onEdit: { editTarget = EditTarget(id: page.id) },
-                    onMoveEarlier: {
-                        Haptics.select()
-                        scan.move(page.id, by: -1)
-                    },
-                    onMoveLater: {
-                        Haptics.select()
-                        scan.move(page.id, by: 1)
-                    },
-                    onDelete: {
-                        Haptics.warning()
-                        scan.remove(page.id)
+        VStack(spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 12)], spacing: 12) {
+                ForEach(Array(scan.pages.enumerated()), id: \.element.id) { index, page in
+                    PageThumb(
+                        page: page,
+                        index: index,
+                        count: scan.pages.count,
+                        onEdit: { editTarget = EditTarget(id: page.id) },
+                        onMoveEarlier: {
+                            Haptics.select()
+                            scan.move(page.id, by: -1)
+                        },
+                        onMoveLater: {
+                            Haptics.select()
+                            scan.move(page.id, by: 1)
+                        },
+                        onDelete: {
+                            Haptics.warning()
+                            scan.remove(page.id)
+                        }
+                    )
+                    // Touch and hold lifts the page (a tap or a scroll never does); it only moves
+                    // when it is dropped on another page.
+                    .draggable(DraggedPage(id: page.id))
+                    .dropDestination(for: DraggedPage.self) { items, _ in
+                        dropTargetID = nil
+                        guard let dragged = items.first,
+                              dragged.id != page.id,
+                              scan.page(withID: dragged.id) != nil else { return false }
+                        Haptics.success()
+                        scan.move(dragged.id, onto: page.id)
+                        return true
+                    } isTargeted: { isOver in
+                        if isOver {
+                            dropTargetID = page.id
+                        } else if dropTargetID == page.id {
+                            dropTargetID = nil
+                        }
                     }
-                )
-                .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    .overlay {
+                        if dropTargetID == page.id {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(Theme.brandGradient, lineWidth: 3)
+                        }
+                    }
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: scan.pages.map { $0.id })
+
+            if scan.pages.count > 1 {
+                Text("To change the order, touch and hold a page, then drag it onto another one.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: scan.pages.map { $0.id })
     }
 
     // MARK: Export
@@ -364,6 +398,17 @@ struct ScanFlowView: View {
         guard let data = await scan.buildPDF(title: "Scan") else { return }
         Haptics.success()
         exportItem = ExportItem(data: data)
+    }
+}
+
+/// What a page carries while it is being dragged to a new position. Only this app can read it,
+/// so dropping a page onto another app doesn't paste anything.
+private struct DraggedPage: Codable, Transferable {
+    let id: UUID
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .json)
+            .visibility(.ownProcess)
     }
 }
 

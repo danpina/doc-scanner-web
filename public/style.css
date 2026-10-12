@@ -257,6 +257,51 @@ main.app-main {
   height: 100%;
   object-fit: cover;
   display: block;
+  -webkit-user-drag: none;
+}
+
+/* Reordering: no text selection / image menu on a long press; scrolling still works until a page lifts. */
+.page-thumb {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@media (hover: hover) {
+  .page-thumb { cursor: grab; }
+}
+
+.page-thumb.dragging {
+  opacity: 0.3;
+}
+
+.page-thumb.drop-target {
+  outline: 3px solid #2a6df4;
+  outline-offset: -3px;
+}
+
+.drag-ghost {
+  position: fixed;
+  margin: 0;
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0.92;
+  transform: scale(1.06) rotate(-2deg);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+body.is-reordering,
+body.is-reordering * {
+  cursor: grabbing !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.reorder-hint {
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+  text-align: center;
 }
 
 .page-thumb .page-num {

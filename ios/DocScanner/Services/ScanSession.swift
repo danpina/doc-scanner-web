@@ -87,6 +87,16 @@ final class ScanSession: ObservableObject {
         pages.swapAt(index, target)
     }
 
+    /// Drag-and-drop reorder: the dragged page takes the dropped-on page's position and the
+    /// pages in between shift over by one.
+    func move(_ id: UUID, onto targetID: UUID) {
+        guard id != targetID,
+              let from = pages.firstIndex(where: { $0.id == id }),
+              let to = pages.firstIndex(where: { $0.id == targetID }) else { return }
+        let page = pages.remove(at: from)
+        pages.insert(page, at: to)
+    }
+
     func applyFilterToAll(_ filter: PageFilter) async {
         guard !pages.isEmpty else { return }
         isBusy = true
