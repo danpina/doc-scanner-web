@@ -1,21 +1,16 @@
 import SwiftUI
 
 /// What the web app's export panel does: name the PDF, then share/save-to-Files it or
-/// (for signed-in users) save it to "My Scans".
+/// keep it in "My Scans" on this iPhone.
 struct ExportSheet: View {
     let pdfData: Data
     let pageCount: Int
-    let allowsSaving: Bool
     let onSaved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var title = ExportSheet.defaultTitle()
     @State private var shareItem: IdentifiableURL?
-    @State private var isSaving = false
     @State private var errorMessage: String?
-
-    // The server accepts 25 MB of JSON and base64 inflates the PDF by a third.
-    private static let maxSaveBytes = 17_000_000
 
     var body: some View {
         NavigationStack {
@@ -89,28 +84,17 @@ struct ExportSheet: View {
             }
             .buttonStyle(.primary)
 
-            if allowsSaving {
-                Button {
-                    Task { await save() }
-                } label: {
-                    if isSaving {
-                        ProgressView()
-                    } else {
-                        Label("Save to My Scans", systemImage: "icloud.and.arrow.up")
-                    }
-                }
-                .buttonStyle(.secondary)
-                .disabled(isSaving)
-
-                if isSaving {
-                    WakeHint()
-                }
-            } else {
-                Text("Guest mode — log in to save scans to an account.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+            Button {
+                save()
+            } label: {
+                Label("Save to My Scans", systemImage: "tray.and.arrow.down")
             }
+            .buttonStyle(.secondary)
+
+            Text("Saved scans stay on this iPhone.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
 
             if let errorMessage {
                 Text(errorMessage)
@@ -144,30 +128,15 @@ struct ExportSheet: View {
         }
     }
 
-    private func save() async {
+    private func save() {
         errorMessage = nil
-        guard pdfData.count <= Self.maxSaveBytes else {
-            errorMessage = "This scan is too large to save. Try fewer pages, or share it instead."
-            return
-        }
-
-        isSaving = true
-        defer { isSaving = false }
         do {
-            struct SaveBody: Encodable {
-                let title: String
-                let pageCount: Int
-                let pdfBase64: String
-            }
-            let _: SavedScan = try await APIClient.shared.send(
-                "/api/scans", method: .post,
-                body: SaveBody(title: cleanTitle, pageCount: pageCount, pdfBase64: pdfData.base64EncodedString())
-            )
+            try LocalScanStore.shared.save(pdf: pdfData, title: cleanTitle, pageCount: pageCount)
             Haptics.success()
             onSaved()
         } catch {
             Haptics.warning()
-            errorMessage = error.localizedDescription
+            errorMessage = "Couldn't save the scan: \(error.localizedDescription)"
         }
     }
 }
