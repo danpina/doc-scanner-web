@@ -1,0 +1,581 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #f4f4f6;
+  color: #1c1c1e;
+}
+
+a {
+  color: #0a6bff;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.muted {
+  color: #6b6b70;
+  font-size: 0.9rem;
+}
+
+.error {
+  color: #d3352d;
+  font-weight: 600;
+}
+
+/* --- Auth --- */
+.auth-main {
+  max-width: 380px;
+  margin: 15vh auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: left;
+  background: #fff;
+  padding: 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.auth-form label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.auth-form input {
+  padding: 0.6rem;
+  border: 1px solid #d6d6da;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.auth-form button {
+  margin-top: 0.5rem;
+  padding: 0.7rem;
+  border: none;
+  border-radius: 8px;
+  background: #0a6bff;
+  color: #fff;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.guest-link {
+  margin: 1.25rem 0 0.25rem;
+  font-weight: 600;
+}
+
+.guest-note {
+  margin: 0;
+}
+
+/* --- App shell --- */
+header.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid #e4e4e7;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+header.app-header h1 {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.support-link {
+  font-size: 0.9rem;
+  text-decoration: none;
+  color: #4a2c17;
+  background: #f5e6d3;
+  border: 1px solid #c9a876;
+  border-radius: 20px;
+  padding: 0.3rem 0.7rem;
+  white-space: nowrap;
+}
+
+main.app-main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1rem;
+  padding-bottom: 6rem;
+}
+
+.fab {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.5rem;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: none;
+  background: #0a6bff;
+  color: #fff;
+  font-size: 1.8rem;
+  box-shadow: 0 4px 12px rgba(10, 107, 255, 0.4);
+}
+
+/* --- Scan list --- */
+.scan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.scan-item {
+  background: #fff;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.scan-item .scan-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.scan-item .scan-title {
+  font-weight: 600;
+}
+
+.scan-item .scan-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.scan-item .scan-actions button {
+  border: none;
+  background: #f0f0f3;
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  font-size: 1.1rem;
+}
+
+.confirm-armed {
+  background: #d3352d !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
+.empty-state {
+  text-align: center;
+  color: #8a8a8e;
+  margin-top: 4rem;
+}
+
+/* --- Scan workflow --- */
+.capture-bar {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.capture-bar label,
+.capture-bar button {
+  flex: 1;
+  min-width: 140px;
+  text-align: center;
+  padding: 0.8rem;
+  border-radius: 10px;
+  border: none;
+  background: #0a6bff;
+  color: #fff;
+  font-weight: 600;
+}
+
+.capture-bar .secondary {
+  background: #e4e4e7;
+  color: #1c1c1e;
+}
+
+.capture-bar select {
+  flex: 1;
+  min-width: 140px;
+  padding: 0.8rem;
+  border-radius: 10px;
+  border: 1px solid #d6d6da;
+  background: #fff;
+  font: inherit;
+}
+
+.page-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.6rem;
+}
+
+.page-thumb {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  aspect-ratio: 3 / 4;
+}
+
+.page-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  -webkit-user-drag: none;
+}
+
+/* Reordering: no text selection / image menu on a long press; scrolling still works until a page lifts. */
+.page-thumb {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+@media (hover: hover) {
+  .page-thumb { cursor: grab; }
+}
+
+.page-thumb.dragging {
+  opacity: 0.3;
+}
+
+.page-thumb.drop-target {
+  outline: 3px solid #2a6df4;
+  outline-offset: -3px;
+}
+
+.drag-ghost {
+  position: fixed;
+  margin: 0;
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0.92;
+  transform: scale(1.06) rotate(-2deg);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+
+body.is-reordering,
+body.is-reordering * {
+  cursor: grabbing !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.storage-note {
+  margin: 1.2rem 0 5rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #6b7280;
+  text-align: center;
+}
+
+.reorder-hint {
+  margin: 0.6rem 0 0;
+  font-size: 0.85rem;
+  color: #6b7280;
+  text-align: center;
+}
+
+.page-thumb .page-num {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.page-thumb .page-controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 3px;
+}
+
+.page-thumb .page-controls button {
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 0.95rem;
+  padding: 2px 6px;
+}
+
+.bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border-top: 1px solid #e4e4e7;
+  padding: 0.75rem 1rem;
+  display: flex;
+  gap: 0.6rem;
+}
+
+.bottom-bar button {
+  flex: 1;
+  padding: 0.8rem;
+  border-radius: 10px;
+  border: none;
+  font-weight: 600;
+}
+
+.bottom-bar .primary {
+  background: #0a6bff;
+  color: #fff;
+}
+
+.bottom-bar .secondary {
+  background: #e4e4e7;
+  color: #1c1c1e;
+}
+
+/* --- Editor overlay (crop + filter) --- */
+.editor-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-canvas-wrap {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  overflow: hidden;
+}
+
+.editor-canvas-wrap canvas {
+  max-width: 100%;
+  max-height: 100%;
+  touch-action: none;
+}
+
+.crop-handle {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  margin-top: -22px;
+  border-radius: 50%;
+  /* A ring rather than a solid disc — the touch target is a full 44px (per mobile
+     a11y guidelines; the old 26px solid dot was hard to grab), but only a thin
+     outline is drawn so it doesn't obscure the document underneath. */
+  background: rgba(10, 107, 255, 0.25);
+  border: 3px solid #0a6bff;
+  box-shadow: 0 0 0 2px #fff, 0 1px 4px rgba(0, 0, 0, 0.5);
+  touch-action: none;
+}
+
+.editor-toolbar {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.8rem;
+  background: #111;
+  flex-wrap: wrap;
+}
+
+.editor-toolbar button {
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  background: #2c2c2e;
+  color: #fff;
+}
+
+.editor-toolbar button.active {
+  background: #0a6bff;
+}
+
+.editor-topbar {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.8rem 1rem;
+  background: #111;
+}
+
+.editor-topbar button {
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.spinner-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  z-index: 100;
+}
+
+/* --- Admin --- */
+.wide-main {
+  max-width: 900px;
+}
+
+.admin-panel {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.admin-panel input[type='text'],
+.admin-panel input[type='password'] {
+  width: 100%;
+  font-size: 1rem;
+  padding: 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #d6d6da;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.checkbox-label input {
+  width: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid #e4e4e7;
+  font-size: 0.9rem;
+}
+
+.admin-table th {
+  color: #6b6b70;
+  font-weight: 600;
+}
+
+.admin-table td input,
+.admin-table td select {
+  padding: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.entry-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.entry-actions button {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.85rem;
+  border: none;
+  border-radius: 6px;
+  background: #f0f0f3;
+}
+
+.reset-password-input {
+  width: 11rem;
+}
+
+.reset-result {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 10px;
+  background: #fff8e1;
+  border: 1px solid #f0d78c;
+}
+
+.reset-result code {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  user-select: all;
+}
+
+.success {
+  color: #1a7f37;
+  font-weight: 600;
+}
+
+.user-bar {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* On a phone the header runs out of room; the email is the least useful part of it. */
+@media (max-width: 520px) {
+  .user-bar .muted {
+    display: none;
+  }
+}
+
+/* "Check your spam folder" callout on the forgot-password confirmation. */
+.spam-reminder {
+  margin: 0.5rem 0 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 10px;
+  background: #fff8e1;
+  border: 1px solid #f0d78c;
+  color: #4a3b00;
+  font-size: 0.95rem;
+  line-height: 1.4;
+}

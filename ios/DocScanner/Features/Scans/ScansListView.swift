@@ -1,9 +1,7 @@
 import SwiftUI
 
-/// Home screen for signed-in users: the saved scans (the web dashboard), plus a big
-/// "New Scan" button.
+/// Home screen: the scans saved on this iPhone, plus a big "New Scan" button.
 struct ScansListView: View {
-    @EnvironmentObject var session: SessionStore
     @StateObject private var model = ScansViewModel()
 
     @State private var showNewScan = false
@@ -30,22 +28,23 @@ struct ScansListView: View {
                             Haptics.tap()
                             showSettings = true
                         } label: {
-                            AvatarView(email: session.user?.email ?? "?")
+                            Image(systemName: "gearshape.fill")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(Theme.brandGradient)
+                                .frame(width: 44, height: 44)
                         }
                         .accessibilityLabel("Settings")
                     }
                 }
                 .safeAreaInset(edge: .bottom) { newScanButton }
         }
-        .task { await model.load() }
+        .onAppear { model.load() }
         .fullScreenCover(isPresented: $showNewScan) {
             ScanFlowView(
-                allowsSaving: true,
-                closeTitle: "Cancel",
                 onClose: { showNewScan = false },
                 onSaved: {
                     showNewScan = false
-                    Task { await model.load() }
+                    model.load()
                 }
             )
         }
@@ -70,7 +69,7 @@ struct ScansListView: View {
             presenting: pendingDelete
         ) { scan in
             Button("Delete \"\(scan.title)\"", role: .destructive) {
-                Task { await model.delete(scan) }
+                model.delete(scan)
             }
         }
         .alert("Something went wrong", isPresented: errorBinding) {
@@ -84,13 +83,7 @@ struct ScansListView: View {
 
     @ViewBuilder
     private var content: some View {
-        if model.isLoading && model.scans.isEmpty {
-            VStack(spacing: 12) {
-                ProgressView()
-                WakeHint().padding(.horizontal)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if model.scans.isEmpty {
+        if model.scans.isEmpty {
             emptyState
         } else {
             list
@@ -110,7 +103,7 @@ struct ScansListView: View {
             }
             Text("No scans yet")
                 .font(.title2.bold())
-            Text("Scan a document, or add photos or a PDF, and save it here to find it on any device.")
+            Text("Scan a document, or add photos or a PDF, and save it here. Your scans stay on this iPhone.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -152,13 +145,12 @@ struct ScansListView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .searchable(text: $query, prompt: "Search scans")
-        .refreshable { await model.load() }
     }
 
     private func row(_ scan: SavedScan) -> some View {
         Button {
             Haptics.tap()
-            Task { await open(scan) }
+            open(scan)
         } label: {
             HStack(spacing: 14) {
                 documentTile(pages: scan.pageCount)
@@ -188,7 +180,7 @@ struct ScansListView: View {
         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
         .contextMenu {
             Button {
-                Task { await share(scan) }
+                share(scan)
             } label: {
                 Label("Share", systemImage: "square.and.arrow.up")
             }
@@ -207,7 +199,7 @@ struct ScansListView: View {
         }
         .swipeActions(edge: .leading) {
             Button {
-                Task { await share(scan) }
+                share(scan)
             } label: {
                 Label("Share", systemImage: "square.and.arrow.up")
             }
@@ -286,14 +278,14 @@ struct ScansListView: View {
         )
     }
 
-    private func open(_ scan: SavedScan) async {
-        if let url = await model.downloadPDF(scan) {
+    private func open(_ scan: SavedScan) {
+        if let url = model.exportCopy(scan) {
             viewing = IdentifiableURL(url: url)
         }
     }
 
-    private func share(_ scan: SavedScan) async {
-        if let url = await model.downloadPDF(scan) {
+    private func share(_ scan: SavedScan) {
+        if let url = model.exportCopy(scan) {
             sharing = IdentifiableURL(url: url)
         }
     }

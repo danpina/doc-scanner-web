@@ -1,19 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject var session: SessionStore
     @Environment(\.dismiss) private var dismiss
-
-    @State private var showChangePassword = false
-    @State private var confirmDelete = false
-    @State private var isDeleting = false
-    @State private var deleteError: String?
-    @State private var serverURLText = ServerConfig.baseURL?.absoluteString ?? ""
-
-    /// Accounts created with Apple start without a password; nil (older server) means "has one".
-    private var hasPassword: Bool {
-        session.user?.hasPassword ?? true
-    }
 
     private var versionText: String {
         let info = Bundle.main.infoDictionary
@@ -26,41 +14,25 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    HStack(spacing: 14) {
-                        AvatarView(email: session.user?.email ?? "?", size: 52)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(session.user?.email ?? "")
-                                .font(.headline)
-                                .lineLimit(1)
-                            Text(session.user?.hasApple == true ? "Signed in with Apple" : "Signed in")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
+                    Label {
+                        Text("Your scans are stored only on this iPhone. Doc Scanner has no account and sends nothing to a server. If iCloud Backup is on, they are included in your iPhone's backup.")
+                            .font(.subheadline)
+                    } icon: {
+                        Image(systemName: "lock.iphone")
+                            .foregroundStyle(Theme.brandGradient)
                     }
                     .padding(.vertical, 4)
+                } header: {
+                    Text("Your scans")
+                } footer: {
+                    Text("Deleting the app deletes the scans saved in it. Share a scan to Files first if you want to keep a copy.")
                 }
 
                 Section {
-                    Button {
-                        showChangePassword = true
-                    } label: {
-                        Label(hasPassword ? "Change password" : "Set a password", systemImage: "key")
-                    }
-
-                    Button {
-                        Task {
-                            await session.logout()
-                        }
-                    } label: {
-                        Label("Log out", systemImage: "rectangle.portrait.and.arrow.right")
-                    }
-                }
-
-                Section {
-                    Link(destination: ServerConfig.productionURL.appendingPathComponent("privacy.html")) {
+                    Link(destination: AppLinks.privacy) {
                         Label("Privacy Policy", systemImage: "hand.raised")
                     }
-                    Link(destination: ServerConfig.productionURL.appendingPathComponent("support.html")) {
+                    Link(destination: AppLinks.support) {
                         Label("Support", systemImage: "questionmark.circle")
                     }
                     HStack {
@@ -71,74 +43,14 @@ struct SettingsView: View {
                 } header: {
                     Text("About")
                 }
-
-                #if DEBUG
-                Section("Server (debug builds only)") {
-                    TextField("https://your-app.example.com", text: $serverURLText)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    Button("Update server URL") {
-                        ServerConfig.baseURL = URL(string: serverURLText)
-                    }
-                }
-                #endif
-
-                Section {
-                    Button(role: .destructive) {
-                        confirmDelete = true
-                    } label: {
-                        HStack {
-                            Label("Delete account", systemImage: "trash")
-                            if isDeleting {
-                                Spacer()
-                                ProgressView()
-                            }
-                        }
-                    }
-                    .disabled(isDeleting)
-
-                    if let deleteError {
-                        Text(deleteError)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                    }
-                } footer: {
-                    Text("Permanently deletes your account and every scan saved to it.")
-                }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $showChangePassword) {
-                ChangePasswordView()
-            }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
-            .confirmationDialog(
-                "Delete your account?",
-                isPresented: $confirmDelete,
-                titleVisibility: .visible
-            ) {
-                Button("Delete account", role: .destructive) {
-                    Task { await deleteAccount() }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This permanently deletes your account and all of your saved scans. It can't be undone.")
-            }
-        }
-    }
-
-    private func deleteAccount() async {
-        deleteError = nil
-        isDeleting = true
-        defer { isDeleting = false }
-        if let error = await session.deleteAccount() {
-            Haptics.warning()
-            deleteError = error
         }
     }
 }

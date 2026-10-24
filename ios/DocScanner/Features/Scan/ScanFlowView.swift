@@ -3,13 +3,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 import VisionKit
 
-/// The scan workflow — capture, reorder/edit pages, export. Used both as the "New Scan"
-/// screen for signed-in users and as the whole app in guest mode.
+/// The scan workflow — capture, reorder/edit pages, export. Shown as the "New Scan" screen.
 struct ScanFlowView: View {
-    /// False in guest mode: export still works, but "Save to My Scans" isn't offered.
-    let allowsSaving: Bool
-    /// Label of the top-left button ("Cancel" in the account flow, "Log in" for guests).
-    let closeTitle: String
     let onClose: () -> Void
     let onSaved: () -> Void
 
@@ -37,9 +32,6 @@ struct ScanFlowView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
-                    if !allowsSaving {
-                        guestBanner
-                    }
                     if scan.pages.isEmpty {
                         captureHero
                     } else {
@@ -57,7 +49,7 @@ struct ScanFlowView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(closeTitle) { leave() }
+                    Button("Cancel") { leave() }
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -96,7 +88,6 @@ struct ScanFlowView: View {
             ExportSheet(
                 pdfData: item.data,
                 pageCount: scan.pages.count,
-                allowsSaving: allowsSaving,
                 onSaved: {
                     exportItem = nil
                     onSaved()
@@ -235,18 +226,6 @@ struct ScanFlowView: View {
             }
             .buttonStyle(.secondary)
         }
-    }
-
-    private var guestBanner: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "person.crop.circle.badge.questionmark")
-            Text("Guest mode — log in to save scans to an account.")
-        }
-        .font(.footnote.weight(.medium))
-        .foregroundStyle(Color.black.opacity(0.8))
-        .padding(10)
-        .frame(maxWidth: .infinity)
-        .background(Theme.amber.opacity(0.9), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     // MARK: Pages

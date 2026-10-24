@@ -4,39 +4,32 @@ import Foundation
 @MainActor
 final class ScansViewModel: ObservableObject {
     @Published var scans: [SavedScan] = []
-    @Published var isLoading = false
     @Published var errorMessage: String?
 
-    func load() async {
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            scans = try await APIClient.shared.send("/api/scans", method: .get)
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+    func load() {
+        scans = LocalScanStore.shared.loadAll()
     }
 
-    func delete(_ scan: SavedScan) async {
+    func delete(_ scan: SavedScan) {
         do {
-            try await APIClient.shared.sendNoContent("/api/scans/\(scan.id)", method: .delete)
+            try LocalScanStore.shared.delete(scan)
             scans.removeAll { $0.id == scan.id }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = "Couldn't delete the scan: \(error.localizedDescription)"
         }
     }
 
-    /// Downloads the stored PDF to a temp file (for viewing or sharing).
-    func downloadPDF(_ scan: SavedScan) async -> URL? {
+    /// A copy named after the scan's title, for viewing or sharing (the stored file is named
+    /// by id, so sharing it directly would hand out a meaningless filename).
+    func exportCopy(_ scan: SavedScan) -> URL? {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(FileNames.safe(scan.title)).pdf")
         do {
-            let data = try await APIClient.shared.fetchData("/api/scans/\(scan.id)/pdf")
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("\(FileNames.safe(scan.title)).pdf")
-            try data.write(to: url, options: .atomic)
+            try? FileManager.default.removeItem(at: url)
+            try FileManager.default.copyItem(at: LocalScanStore.shared.pdfURL(for: scan), to: url)
             return url
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = "Couldn't open the scan: \(error.localizedDescription)"
             return nil
         }
     }
