@@ -17,6 +17,10 @@ targets:
       path: Generated/Info.plist
       properties:
         CFBundleDisplayName: Doc Scanner
+        # XcodeGen's generated Info.plist otherwise hard-codes "1.0", which ignores MARKETING_VERSION
+        # and makes App Store Connect reject every build after the first release.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
