@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Home screen: the scans saved on this iPhone, plus a big "New Scan" button.
 struct ScansListView: View {
+    @ObservedObject var inbox: ImportInbox
     @StateObject private var model = ScansViewModel()
 
     @State private var showNewScan = false
@@ -38,9 +39,16 @@ struct ScansListView: View {
                 }
                 .safeAreaInset(edge: .bottom) { newScanButton }
         }
-        .onAppear { model.load() }
+        .onAppear {
+            model.load()
+            openScanScreenIfFilesArrived()
+        }
+        .onChange(of: inbox.pendingURLs) { _ in
+            openScanScreenIfFilesArrived()
+        }
         .fullScreenCover(isPresented: $showNewScan) {
             ScanFlowView(
+                inbox: inbox,
                 onClose: { showNewScan = false },
                 onSaved: {
                     showNewScan = false
@@ -293,6 +301,14 @@ struct ScansListView: View {
                 if !shown { model.errorMessage = nil }
             }
         )
+    }
+
+    /// A PDF or image sent from another app opens straight into a new scan.
+    private func openScanScreenIfFilesArrived() {
+        if !inbox.pendingURLs.isEmpty {
+            showSettings = false
+            showNewScan = true
+        }
     }
 
     private func open(_ scan: SavedScan) {

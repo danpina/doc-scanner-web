@@ -62,6 +62,34 @@ final class ScanSession: ObservableObject {
         pages.append(contentsOf: await makePages(from: images))
     }
 
+    /// PDFs and images handed over by another app. Copies iOS placed in this app's Inbox folder
+    /// are deleted once read.
+    func addFiles(_ urls: [URL]) async {
+        guard !urls.isEmpty else { return }
+        isBusy = true
+        defer { isBusy = false }
+
+        var images: [UIImage] = []
+        for url in urls {
+            let scoped = url.startAccessingSecurityScopedResource()
+            if url.pathExtension.lowercased() == "pdf" {
+                images.append(contentsOf: PDFImporter.pageImages(from: url))
+            } else if let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
+                images.append(image)
+            }
+            if scoped { url.stopAccessingSecurityScopedResource() }
+            if url.path.contains("/Inbox/") {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+        guard !images.isEmpty else {
+            errorMessage = "Couldn't read that file. Doc Scanner opens PDFs and images."
+            return
+        }
+        pages.append(contentsOf: await makePages(from: images))
+        Haptics.success()
+    }
+
     /// The front (and, if scanned, the back) of an ID card, placed together on one page.
     func addIDCard(_ images: [UIImage]) async {
         guard let front = images.first else { return }

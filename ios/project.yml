@@ -26,6 +26,19 @@ targets:
           - UIInterfaceOrientationPortrait
         NSCameraUsageDescription: "Doc Scanner uses the camera to scan your documents."
         ITSAppUsesNonExemptEncryption: false
+        # Lets "Open in…" / "Copy to Doc Scanner" appear for PDFs and images in Files, Mail, Safari, etc.
+        LSSupportsOpeningDocumentsInPlace: false
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: PDF Document
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - com.adobe.pdf
+          - CFBundleTypeName: Image
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.image
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.danipina.docscanner

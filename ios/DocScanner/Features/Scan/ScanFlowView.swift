@@ -5,6 +5,7 @@ import VisionKit
 
 /// The scan workflow — capture, reorder/edit pages, export. Shown as the "New Scan" screen.
 struct ScanFlowView: View {
+    @ObservedObject var inbox: ImportInbox
     let onClose: () -> Void
     let onSaved: () -> Void
 
@@ -139,6 +140,8 @@ struct ScanFlowView: View {
             photoItems = []
             Task { await scan.addPhotos(items) }
         }
+        .onAppear { takeFilesFromInbox() }
+        .onChange(of: inbox.pendingURLs) { _ in takeFilesFromInbox() }
         .alert("Scan an ID card", isPresented: $showIDCardHint) {
             Button("Scan the front") {
                 idSide = .front
@@ -487,6 +490,12 @@ struct ScanFlowView: View {
             }
             Haptics.success()
         }
+    }
+
+    private func takeFilesFromInbox() {
+        let urls = inbox.take()
+        guard !urls.isEmpty else { return }
+        Task { await scan.addFiles(urls) }
     }
 
     private func leave() {
