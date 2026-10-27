@@ -124,7 +124,7 @@ final class ScanSession: ObservableObject {
         let current = pages
         pages = await Task.detached(priority: .userInitiated) {
             current.map { page in
-                ScanPage.make(id: page.id, original: page.original, corners: page.corners, filter: filter)
+                ScanPage.make(id: page.id, original: page.original, corners: page.corners, filter: filter, marks: page.marks)
             }
         }.value
     }

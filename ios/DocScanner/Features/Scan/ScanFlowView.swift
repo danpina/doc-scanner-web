@@ -16,6 +16,7 @@ struct ScanFlowView: View {
     @State private var showFileImporter = false
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var editTarget: EditTarget?
+    @State private var markupTarget: EditTarget?
     @State private var exportItem: ExportItem?
     @State private var allFilter: PageFilter = .original
     @State private var confirmLeave = false
@@ -91,6 +92,18 @@ struct ScanFlowView: View {
                     onDone: { updated in
                         scan.replace(updated)
                         editTarget = nil
+                    }
+                )
+            }
+        }
+        .fullScreenCover(item: $markupTarget) { target in
+            if let page = scan.page(withID: target.id) {
+                MarkupEditorView(
+                    page: page,
+                    onCancel: { markupTarget = nil },
+                    onDone: { updated in
+                        scan.replace(updated)
+                        markupTarget = nil
                     }
                 )
             }
@@ -289,6 +302,7 @@ struct ScanFlowView: View {
                         index: index,
                         count: scan.pages.count,
                         onEdit: { editTarget = EditTarget(id: page.id) },
+                        onMarkup: { markupTarget = EditTarget(id: page.id) },
                         onMoveEarlier: {
                             Haptics.select()
                             scan.move(page.id, by: -1)
@@ -427,6 +441,7 @@ private struct PageThumb: View {
     let index: Int
     let count: Int
     let onEdit: () -> Void
+    let onMarkup: () -> Void
     let onMoveEarlier: () -> Void
     let onMoveLater: () -> Void
     let onDelete: () -> Void
@@ -448,6 +463,21 @@ private struct PageThumb: View {
                         .frame(width: 24, height: 24)
                         .background(Theme.brandGradient, in: Circle())
                         .padding(8)
+                }
+                .overlay(alignment: .topTrailing) {
+                    Button(action: onMarkup) {
+                        Image(systemName: "signature")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(page.marks.isEmpty ? Theme.blueDeep : Color.white)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                page.marks.isEmpty ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(Theme.brandGradient),
+                                in: Circle()
+                            )
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Sign and fill in")
+                    .padding(6)
                 }
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onEdit)

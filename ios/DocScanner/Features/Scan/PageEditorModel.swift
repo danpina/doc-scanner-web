@@ -5,6 +5,7 @@ import SwiftUI
 @MainActor
 final class PageEditorModel: ObservableObject {
     let pageID: UUID
+    private let marks: [PageMark]
     @Published private(set) var original: UIImage
     /// In `original` pixel coordinates.
     @Published var corners: [CGPoint]
@@ -20,6 +21,7 @@ final class PageEditorModel: ObservableObject {
 
     init(page: ScanPage) {
         pageID = page.id
+        marks = page.marks
         original = page.original
         corners = page.corners
         filter = page.filter
@@ -54,8 +56,9 @@ final class PageEditorModel: ObservableObject {
         let source = original
         let quad = corners
         let chosen = filter
+        let kept = marks
         return await Task.detached(priority: .userInitiated) {
-            ScanPage.make(id: id, original: source, corners: quad, filter: chosen)
+            ScanPage.make(id: id, original: source, corners: quad, filter: chosen, marks: kept)
         }.value
     }
 

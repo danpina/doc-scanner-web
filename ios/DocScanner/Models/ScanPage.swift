@@ -30,7 +30,9 @@ struct ScanPage: Identifiable {
     /// Crop corners (top-left, top-right, bottom-right, bottom-left) in `original` pixel coordinates.
     var corners: [CGPoint]
     var filter: PageFilter
-    /// Perspective-corrected + filtered — this is what ends up in the PDF.
+    /// Signatures and typed text placed on the page (see `MarkupEditorView`).
+    var marks: [PageMark]
+    /// Perspective-corrected + filtered + marks — this is what ends up in the PDF.
     var processed: UIImage
     var thumbnail: UIImage
 
@@ -39,15 +41,18 @@ struct ScanPage: Identifiable {
         id: UUID = UUID(),
         original: UIImage,
         corners: [CGPoint]? = nil,
-        filter: PageFilter = .original
+        filter: PageFilter = .original,
+        marks: [PageMark] = []
     ) -> ScanPage {
         let corners = corners ?? ImageProcessing.fullFrame(for: original.size)
-        let processed = ImageProcessing.render(original: original, corners: corners, filter: filter)
+        let rendered = ImageProcessing.render(original: original, corners: corners, filter: filter)
+        let processed = MarkRenderer.draw(marks, on: rendered)
         return ScanPage(
             id: id,
             original: original,
             corners: corners,
             filter: filter,
+            marks: marks,
             processed: processed,
             thumbnail: ImageProcessing.scaled(processed, maxDimension: 360)
         )
