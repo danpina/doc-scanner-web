@@ -135,7 +135,7 @@ struct ScanFlowView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Scan the front of the card, then the back, then tap Save. Both sides are placed together on one page at real size.")
+            Text("Scan the front of the card, then the back, then tap Save. Both sides are placed together on one page, as large as will fit.")
         }
         .alert("Camera not available", isPresented: $showCameraUnavailable) {
             Button("OK", role: .cancel) {}
