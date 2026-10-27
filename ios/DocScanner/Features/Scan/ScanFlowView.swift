@@ -11,6 +11,8 @@ struct ScanFlowView: View {
     @StateObject private var scan = ScanSession()
     @State private var showCamera = false
     @State private var showCameraUnavailable = false
+    @State private var showIDCardHint = false
+    @State private var idCardMode = false
     @State private var showFileImporter = false
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var editTarget: EditTarget?
@@ -63,12 +65,21 @@ struct ScanFlowView: View {
             DocumentCameraView(
                 onFinish: { images in
                     showCamera = false
+                    let isID = idCardMode
+                    idCardMode = false
                     Task {
-                        await scan.addScanned(images)
+                        if isID {
+                            await scan.addIDCard(images)
+                        } else {
+                            await scan.addScanned(images)
+                        }
                         Haptics.success()
                     }
                 },
-                onCancel: { showCamera = false }
+                onCancel: {
+                    showCamera = false
+                    idCardMode = false
+                }
             )
             .ignoresSafeArea()
         }
@@ -86,9 +97,7 @@ struct ScanFlowView: View {
         }
         .sheet(item: $exportItem) { item in
             ExportSheet(
-                pdfData: item.pdf.data,
-                suggestedTitle: item.pdf.suggestedTitle,
-                searchText: item.pdf.searchText,
+                source: item.pdf,
                 pageCount: scan.pages.count,
                 onSaved: {
                     exportItem = nil
@@ -105,6 +114,15 @@ struct ScanFlowView: View {
             guard !items.isEmpty else { return }
             photoItems = []
             Task { await scan.addPhotos(items) }
+        }
+        .alert("Scan an ID card", isPresented: $showIDCardHint) {
+            Button("Open camera") {
+                idCardMode = true
+                startCamera()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Scan the front of the card, then the back, then tap Save. Both sides are placed together on one page at real size.")
         }
         .alert("Camera not available", isPresented: $showCameraUnavailable) {
             Button("OK", role: .cancel) {}
@@ -176,6 +194,14 @@ struct ScanFlowView: View {
                 }
                 .buttonStyle(.pressable)
             }
+
+            Button {
+                Haptics.tap()
+                showIDCardHint = true
+            } label: {
+                secondaryTile(icon: "person.text.rectangle", title: "ID card", subtitle: "Front and back on one page")
+            }
+            .buttonStyle(.pressable)
 
             Text("Everything is processed on your device.")
                 .font(.footnote)
@@ -361,6 +387,7 @@ struct ScanFlowView: View {
     private func startCamera() {
         Haptics.tap()
         guard VNDocumentCameraViewController.isSupported else {
+            idCardMode = false
             showCameraUnavailable = true
             return
         }

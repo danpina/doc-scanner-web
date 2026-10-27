@@ -62,6 +62,24 @@ final class ScanSession: ObservableObject {
         pages.append(contentsOf: await makePages(from: images))
     }
 
+    /// The front (and, if scanned, the back) of an ID card, placed together on one page.
+    func addIDCard(_ images: [UIImage]) async {
+        guard let front = images.first else { return }
+        let back = images.count > 1 ? images[1] : nil
+        isBusy = true
+        defer { isBusy = false }
+
+        let page = await Task.detached(priority: .userInitiated) {
+            let limit = IDCardComposer.longEdgePixels
+            let composed = IDCardComposer.compose(
+                front: ImageProcessing.scaled(front, maxDimension: limit),
+                back: back.map { ImageProcessing.scaled($0, maxDimension: limit) }
+            )
+            return ScanPage.make(original: composed)
+        }.value
+        pages.append(page)
+    }
+
     private func makePages(from images: [UIImage]) async -> [ScanPage] {
         await Task.detached(priority: .userInitiated) {
             images.map { raw in
@@ -113,9 +131,13 @@ final class ScanSession: ObservableObject {
 
     // MARK: Export
 
-    /// The finished PDF plus what was read from it: the words for searching and a suggested title.
+    /// The finished PDF plus what was read from it (the words for searching, a suggested title),
+    /// and the page images and text it was built from, so the export screen can build it again
+    /// with other options without reading the pages a second time.
     struct BuiltPDF {
         let data: Data
+        let images: [UIImage]
+        let texts: [PageText]
         let suggestedTitle: String?
         let searchText: String?
     }
@@ -145,7 +167,7 @@ final class ScanSession: ObservableObject {
         let texts = recognized
         let suggested = SmartTitle.suggest(from: texts)
         let data = await Task.detached(priority: .userInitiated) {
-            PDFBuilder.makePDF(from: images, text: texts, title: suggested ?? "Scan")
+            PDFBuilder.makePDF(from: images, text: texts, title: suggested ?? "Scan", options: .stored)
         }.value
         guard let data else { return nil }
 
@@ -153,6 +175,8 @@ final class ScanSession: ObservableObject {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return BuiltPDF(
             data: data,
+            images: images,
+            texts: texts,
             suggestedTitle: suggested,
             searchText: joined.isEmpty ? nil : String(joined.prefix(Self.maxSearchTextLength))
         )

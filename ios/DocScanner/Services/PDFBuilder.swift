@@ -2,14 +2,23 @@ import CoreText
 import UIKit
 
 enum PDFBuilder {
-    /// Each page is sized to its own image's aspect ratio (long edge = A4's), so the scan fills
-    /// the page edge-to-edge with no white borders — same rule as the web app's export.
+    /// With the "as scanned" layout, each page is sized to its own image's aspect ratio (long
+    /// edge = A4's), so the scan fills the page edge-to-edge with no white borders — same rule
+    /// as the web app's export.
     private static let longEdge: CGFloat = 841.89
+
+    /// White space kept around the scan on A4 / Letter pages.
+    private static let pageMargin: CGFloat = 18
 
     /// `text`, when given, holds the recognized text of each page (same order as `images`). It is
     /// written into the PDF invisibly, on top of each page's image, so the PDF can be searched
     /// and its text selected while the scan itself looks exactly as before.
-    static func makePDF(from images: [UIImage], text: [PageText] = [], title: String) -> Data? {
+    static func makePDF(
+        from images: [UIImage],
+        text: [PageText] = [],
+        title: String,
+        options: ExportOptions = ExportOptions()
+    ) -> Data? {
         guard let first = images.first else { return nil }
 
         let format = UIGraphicsPDFRendererFormat()
@@ -18,14 +27,15 @@ enum PDFBuilder {
             kCGPDFContextCreator as String: "Doc Scanner"
         ]
 
-        let renderer = UIGraphicsPDFRenderer(bounds: pageRect(for: first), format: format)
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect(for: first, layout: options.layout), format: format)
         return renderer.pdfData { context in
             for (index, image) in images.enumerated() {
-                let rect = pageRect(for: image)
-                context.beginPage(withBounds: rect, pageInfo: [:])
-                compressed(image).draw(in: rect)
+                let page = pageRect(for: image, layout: options.layout)
+                let imageRect = placement(of: image, on: page, layout: options.layout)
+                context.beginPage(withBounds: page, pageInfo: [:])
+                compressed(image, quality: options.quality).draw(in: imageRect)
                 if index < text.count {
-                    drawInvisibleText(text[index], in: rect, context: context.cgContext)
+                    drawInvisibleText(text[index], in: imageRect, context: context.cgContext)
                 }
             }
         }
@@ -61,9 +71,17 @@ enum PDFBuilder {
         context.restoreGState()
     }
 
-    private static func pageRect(for image: UIImage) -> CGRect {
+    private static func pageRect(for image: UIImage, layout: PageLayout) -> CGRect {
         let width = image.size.width
         let height = image.size.height
+
+        if let portrait = layout.portraitSize {
+            // A landscape scan gets a landscape sheet.
+            return width > height
+                ? CGRect(x: 0, y: 0, width: portrait.height, height: portrait.width)
+                : CGRect(origin: .zero, size: portrait)
+        }
+
         guard width > 0, height > 0 else {
             return CGRect(x: 0, y: 0, width: 595.28, height: longEdge)
         }
@@ -73,11 +91,28 @@ enum PDFBuilder {
         return CGRect(x: 0, y: 0, width: longEdge, height: longEdge * height / width)
     }
 
-    /// Round-trips through JPEG so the PDF embeds compressed pixels instead of raw ones
-    /// (a raw page would be several MB, and uploads are capped).
-    private static func compressed(_ image: UIImage) -> UIImage {
-        guard let data = image.jpegData(compressionQuality: 0.85), let jpeg = UIImage(data: data) else {
-            return image
+    /// Where the image goes on its page: the whole page for "as scanned", otherwise the largest
+    /// copy that fits inside the margins, centered.
+    private static func placement(of image: UIImage, on page: CGRect, layout: PageLayout) -> CGRect {
+        guard layout.portraitSize != nil, image.size.width > 0, image.size.height > 0 else { return page }
+
+        let available = page.insetBy(dx: pageMargin, dy: pageMargin)
+        let scale = min(available.width / image.size.width, available.height / image.size.height)
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        return CGRect(
+            x: page.midX - size.width / 2,
+            y: page.midY - size.height / 2,
+            width: size.width,
+            height: size.height
+        )
+    }
+
+    /// Shrinks the image to the quality's size, then round-trips through JPEG so the PDF embeds
+    /// compressed pixels instead of raw ones (a raw page would be several MB).
+    private static func compressed(_ image: UIImage, quality: OutputQuality) -> UIImage {
+        let sized = ImageProcessing.scaled(image, maxDimension: quality.maxPixels)
+        guard let data = sized.jpegData(compressionQuality: quality.jpegQuality), let jpeg = UIImage(data: data) else {
+            return sized
         }
         return jpeg
     }

@@ -1,26 +1,31 @@
+import PDFKit
 import SwiftUI
 
-/// What the web app's export panel does: name the PDF, then share/save-to-Files it or
-/// keep it in "My Scans" on this iPhone.
+/// What the web app's export panel does: name the PDF, pick its size and page format, then
+/// share/save-to-Files it or keep it in "My Scans" on this iPhone.
 struct ExportSheet: View {
-    let pdfData: Data
-    let suggestedTitle: String?
-    let searchText: String?
+    let source: ScanSession.BuiltPDF
     let pageCount: Int
     let onSaved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(ExportOptions.qualityKey) private var qualityRaw = OutputQuality.best.rawValue
+    @AppStorage(ExportOptions.layoutKey) private var layoutRaw = PageLayout.original.rawValue
+    @State private var pdfData: Data
+    @State private var isRebuilding = false
+    @State private var rebuildTask: Task<Void, Never>?
     @State private var title: String
+    @State private var usePassword = false
+    @State private var password = ""
     @State private var shareItem: IdentifiableURL?
     @State private var errorMessage: String?
 
-    init(pdfData: Data, suggestedTitle: String?, searchText: String?, pageCount: Int, onSaved: @escaping () -> Void) {
-        self.pdfData = pdfData
-        self.suggestedTitle = suggestedTitle
-        self.searchText = searchText
+    init(source: ScanSession.BuiltPDF, pageCount: Int, onSaved: @escaping () -> Void) {
+        self.source = source
         self.pageCount = pageCount
         self.onSaved = onSaved
-        _title = State(initialValue: suggestedTitle ?? ExportSheet.defaultTitle())
+        _pdfData = State(initialValue: source.data)
+        _title = State(initialValue: source.suggestedTitle ?? ExportSheet.defaultTitle())
     }
 
     var body: some View {
@@ -29,6 +34,7 @@ struct ExportSheet: View {
                 VStack(spacing: 18) {
                     summaryCard
                     titleCard
+                    optionsCard
                     actions
                 }
                 .padding(16)
@@ -44,6 +50,8 @@ struct ExportSheet: View {
             .sheet(item: $shareItem) { item in
                 ShareSheet(items: [item.url])
             }
+            .onChange(of: qualityRaw) { _ in rebuild() }
+            .onChange(of: layoutRaw) { _ in rebuild() }
             .keyboardDismissible()
         }
     }
@@ -63,11 +71,14 @@ struct ExportSheet: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Your PDF is ready")
                     .font(.headline)
-                Text("\(pageCount) page\(pageCount == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: Int64(pdfData.count), countStyle: .file))\(searchText == nil ? "" : " · searchable")")
+                Text("\(pageCount) page\(pageCount == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: Int64(pdfData.count), countStyle: .file))\(source.searchText == nil ? "" : " · searchable")")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
+            if isRebuilding {
+                ProgressView()
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
@@ -80,8 +91,61 @@ struct ExportSheet: View {
                 .foregroundStyle(.secondary)
             TextField("Title", text: $title)
                 .font(.body)
-            if suggestedTitle != nil {
+            if source.suggestedTitle != nil {
                 Text("Suggested from the text on the first page. Change it if you like.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardStyle()
+    }
+
+    private var optionsCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Options")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("File size")
+                    .font(.subheadline.weight(.medium))
+                Picker("File size", selection: $qualityRaw) {
+                    ForEach(OutputQuality.allCases) { quality in
+                        Text(quality.label).tag(quality.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text(options.quality.hint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Page format")
+                    .font(.subheadline.weight(.medium))
+                Picker("Page format", selection: $layoutRaw) {
+                    ForEach(PageLayout.allCases) { layout in
+                        Text(layout.label).tag(layout.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text(options.layout.hint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Password for the shared file", isOn: $usePassword)
+                    .font(.subheadline.weight(.medium))
+                if usePassword {
+                    SecureField("Password", text: $password)
+                        .textContentType(.newPassword)
+                        .textFieldStyle(.roundedBorder)
+                }
+                Text(usePassword
+                     ? "Whoever opens the shared file needs this password. It can't be recovered, so keep it safe. The copy in My Scans stays unlocked on your iPhone."
+                     : "Lock the PDF you share with a password.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -99,6 +163,7 @@ struct ExportSheet: View {
                 Label("Share / Save to Files", systemImage: "square.and.arrow.up")
             }
             .buttonStyle(.primary)
+            .disabled(isRebuilding || (usePassword && password.isEmpty))
 
             Button {
                 save()
@@ -106,6 +171,7 @@ struct ExportSheet: View {
                 Label("Save to My Scans", systemImage: "tray.and.arrow.down")
             }
             .buttonStyle(.secondary)
+            .disabled(isRebuilding)
 
             Text("Saved scans stay on this iPhone.")
                 .font(.footnote)
@@ -118,6 +184,34 @@ struct ExportSheet: View {
                     .foregroundStyle(.red)
                     .multilineTextAlignment(.center)
             }
+        }
+    }
+
+    // MARK: Options
+
+    private var options: ExportOptions {
+        ExportOptions(
+            quality: OutputQuality(rawValue: qualityRaw) ?? .best,
+            layout: PageLayout(rawValue: layoutRaw) ?? .original
+        )
+    }
+
+    /// Builds the PDF again with the chosen options. The pages and their text are reused.
+    private func rebuild() {
+        rebuildTask?.cancel()
+        isRebuilding = true
+
+        let images = source.images
+        let texts = source.texts
+        let pdfTitle = source.suggestedTitle ?? "Scan"
+        let chosen = options
+        rebuildTask = Task {
+            let data = await Task.detached(priority: .userInitiated) {
+                PDFBuilder.makePDF(from: images, text: texts, title: pdfTitle, options: chosen)
+            }.value
+            guard !Task.isCancelled else { return }
+            if let data { pdfData = data }
+            isRebuilding = false
         }
     }
 
@@ -137,7 +231,18 @@ struct ExportSheet: View {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(FileNames.safe(cleanTitle)).pdf")
         do {
-            try pdfData.write(to: url, options: .atomic)
+            if usePassword {
+                guard let document = PDFDocument(data: pdfData),
+                      document.write(to: url, withOptions: [
+                        PDFDocumentWriteOption.userPasswordOption: password,
+                        PDFDocumentWriteOption.ownerPasswordOption: password
+                      ]) else {
+                    errorMessage = "Couldn't lock the PDF with a password."
+                    return
+                }
+            } else {
+                try pdfData.write(to: url, options: .atomic)
+            }
             shareItem = IdentifiableURL(url: url)
         } catch {
             errorMessage = "Couldn't prepare the file: \(error.localizedDescription)"
@@ -147,7 +252,7 @@ struct ExportSheet: View {
     private func save() {
         errorMessage = nil
         do {
-            try LocalScanStore.shared.save(pdf: pdfData, title: cleanTitle, pageCount: pageCount, searchText: searchText)
+            try LocalScanStore.shared.save(pdf: pdfData, title: cleanTitle, pageCount: pageCount, searchText: source.searchText)
             Haptics.success()
             onSaved()
         } catch {
