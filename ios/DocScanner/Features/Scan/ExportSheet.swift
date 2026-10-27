@@ -4,13 +4,24 @@ import SwiftUI
 /// keep it in "My Scans" on this iPhone.
 struct ExportSheet: View {
     let pdfData: Data
+    let suggestedTitle: String?
+    let searchText: String?
     let pageCount: Int
     let onSaved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var title = ExportSheet.defaultTitle()
+    @State private var title: String
     @State private var shareItem: IdentifiableURL?
     @State private var errorMessage: String?
+
+    init(pdfData: Data, suggestedTitle: String?, searchText: String?, pageCount: Int, onSaved: @escaping () -> Void) {
+        self.pdfData = pdfData
+        self.suggestedTitle = suggestedTitle
+        self.searchText = searchText
+        self.pageCount = pageCount
+        self.onSaved = onSaved
+        _title = State(initialValue: suggestedTitle ?? ExportSheet.defaultTitle())
+    }
 
     var body: some View {
         NavigationStack {
@@ -52,7 +63,7 @@ struct ExportSheet: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Your PDF is ready")
                     .font(.headline)
-                Text("\(pageCount) page\(pageCount == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: Int64(pdfData.count), countStyle: .file))")
+                Text("\(pageCount) page\(pageCount == 1 ? "" : "s") · \(ByteCountFormatter.string(fromByteCount: Int64(pdfData.count), countStyle: .file))\(searchText == nil ? "" : " · searchable")")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -69,6 +80,11 @@ struct ExportSheet: View {
                 .foregroundStyle(.secondary)
             TextField("Title", text: $title)
                 .font(.body)
+            if suggestedTitle != nil {
+                Text("Suggested from the text on the first page. Change it if you like.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
@@ -131,7 +147,7 @@ struct ExportSheet: View {
     private func save() {
         errorMessage = nil
         do {
-            try LocalScanStore.shared.save(pdf: pdfData, title: cleanTitle, pageCount: pageCount)
+            try LocalScanStore.shared.save(pdf: pdfData, title: cleanTitle, pageCount: pageCount, searchText: searchText)
             Haptics.success()
             onSaved()
         } catch {

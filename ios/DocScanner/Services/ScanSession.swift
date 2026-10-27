@@ -7,6 +7,7 @@ import SwiftUI
 final class ScanSession: ObservableObject {
     @Published private(set) var pages: [ScanPage] = []
     @Published var isBusy = false
+    @Published private(set) var busyMessage = "Processing…"
     @Published var errorMessage: String?
 
     func page(withID id: UUID) -> ScanPage? {
@@ -112,14 +113,51 @@ final class ScanSession: ObservableObject {
 
     // MARK: Export
 
-    func buildPDF(title: String) async -> Data? {
+    /// The finished PDF plus what was read from it: the words for searching and a suggested title.
+    struct BuiltPDF {
+        let data: Data
+        let suggestedTitle: String?
+        let searchText: String?
+    }
+
+    /// Text recognition is skipped when the user turned it off in Settings.
+    func buildPDF() async -> BuiltPDF? {
         guard !pages.isEmpty else { return nil }
         isBusy = true
-        defer { isBusy = false }
+        defer {
+            isBusy = false
+            busyMessage = "Processing…"
+        }
 
         let images = pages.map { $0.processed }
-        return await Task.detached(priority: .userInitiated) {
-            PDFBuilder.makePDF(from: images, title: title)
+
+        var recognized: [PageText] = []
+        if TextRecognizer.isEnabled {
+            for (index, image) in images.enumerated() {
+                busyMessage = images.count == 1 ? "Reading text…" : "Reading text… \(index + 1) of \(images.count)"
+                recognized.append(await Task.detached(priority: .userInitiated) {
+                    TextRecognizer.recognize(image)
+                }.value)
+            }
+            busyMessage = "Building PDF…"
+        }
+
+        let texts = recognized
+        let suggested = SmartTitle.suggest(from: texts)
+        let data = await Task.detached(priority: .userInitiated) {
+            PDFBuilder.makePDF(from: images, text: texts, title: suggested ?? "Scan")
         }.value
+        guard let data else { return nil }
+
+        let joined = texts.map(\.plain).joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return BuiltPDF(
+            data: data,
+            suggestedTitle: suggested,
+            searchText: joined.isEmpty ? nil : String(joined.prefix(Self.maxSearchTextLength))
+        )
     }
+
+    /// Keeps the saved index small even for a long scanned book.
+    private static let maxSearchTextLength = 30_000
 }

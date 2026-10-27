@@ -46,13 +46,14 @@ final class LocalScanStore {
     }
 
     @discardableResult
-    func save(pdf: Data, title: String, pageCount: Int) throws -> SavedScan {
+    func save(pdf: Data, title: String, pageCount: Int, searchText: String? = nil) throws -> SavedScan {
         let scan = SavedScan(
             id: UUID().uuidString,
             title: title,
             pageCount: pageCount,
             pdfSize: pdf.count,
-            createdAt: Date()
+            createdAt: Date(),
+            searchText: searchText
         )
         // PDF first, index second: a crash in between leaves an unlisted file, never a listed
         // scan with nothing behind it.

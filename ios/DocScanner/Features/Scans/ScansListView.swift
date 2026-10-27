@@ -144,7 +144,7 @@ struct ScansListView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .searchable(text: $query, prompt: "Search scans")
+        .searchable(text: $query, prompt: "Search titles and text")
     }
 
     private func row(_ scan: SavedScan) -> some View {
@@ -164,6 +164,12 @@ struct ScansListView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                    if let snippet = searchSnippet(for: scan) {
+                        Text(snippet)
+                            .font(.caption)
+                            .foregroundStyle(Theme.blueDeep)
+                            .lineLimit(2)
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -249,7 +255,18 @@ struct ScansListView: View {
     private var filteredScans: [SavedScan] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return model.scans }
-        return model.scans.filter { $0.title.localizedCaseInsensitiveContains(trimmed) }
+        return model.scans.filter { $0.matches(trimmed) }
+    }
+
+    /// Where the search words appear inside the scan, shown when the title alone doesn't explain
+    /// why the scan is in the results.
+    private func searchSnippet(for scan: SavedScan) -> String? {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              scan.title.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive]) == nil else {
+            return nil
+        }
+        return scan.snippet(for: trimmed)
     }
 
     /// Scans grouped by month, newest first (the server already returns them newest first).

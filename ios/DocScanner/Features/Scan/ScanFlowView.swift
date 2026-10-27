@@ -25,7 +25,7 @@ struct ScanFlowView: View {
 
     private struct ExportItem: Identifiable {
         let id = UUID()
-        let data: Data
+        let pdf: ScanSession.BuiltPDF
     }
 
     var body: some View {
@@ -86,7 +86,9 @@ struct ScanFlowView: View {
         }
         .sheet(item: $exportItem) { item in
             ExportSheet(
-                pdfData: item.data,
+                pdfData: item.pdf.data,
+                suggestedTitle: item.pdf.suggestedTitle,
+                searchText: item.pdf.searchText,
                 pageCount: scan.pages.count,
                 onSaved: {
                     exportItem = nil
@@ -338,7 +340,7 @@ struct ScanFlowView: View {
         if scan.isBusy {
             ZStack {
                 Color.black.opacity(0.25).ignoresSafeArea()
-                ProgressView("Processing…")
+                ProgressView(scan.busyMessage)
                     .padding(22)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
@@ -374,9 +376,9 @@ struct ScanFlowView: View {
     }
 
     private func startExport() async {
-        guard let data = await scan.buildPDF(title: "Scan") else { return }
+        guard let pdf = await scan.buildPDF() else { return }
         Haptics.success()
-        exportItem = ExportItem(data: data)
+        exportItem = ExportItem(pdf: pdf)
     }
 }
 

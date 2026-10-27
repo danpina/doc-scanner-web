@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(TextRecognizer.settingKey) private var recognizeText = true
 
     private var versionText: String {
         let info = Bundle.main.infoDictionary
@@ -26,6 +27,16 @@ struct SettingsView: View {
                     Text("Your scans")
                 } footer: {
                     Text("Deleting the app deletes the scans saved in it. Share a scan to Files first if you want to keep a copy.")
+                }
+
+                Section {
+                    Toggle(isOn: $recognizeText) {
+                        Label("Make scans searchable", systemImage: "text.magnifyingglass")
+                    }
+                } header: {
+                    Text("Text recognition")
+                } footer: {
+                    Text("Reads the words on each page when you export, so you can search your scans and select text in the PDF. It happens on your iPhone; nothing is sent anywhere. Exporting takes a little longer.")
                 }
 
                 Section {
