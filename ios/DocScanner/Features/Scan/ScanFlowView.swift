@@ -12,7 +12,12 @@ struct ScanFlowView: View {
     @State private var showCamera = false
     @State private var showCameraUnavailable = false
     @State private var showIDCardHint = false
-    @State private var idCardMode = false
+    @State private var showIDBackPrompt = false
+    @State private var showIDLayoutChoice = false
+    /// Which side of an ID card the camera is capturing right now; nil for an ordinary scan.
+    @State private var idSide: IDSide?
+    @State private var idFront: UIImage?
+    @State private var idBack: UIImage?
     @State private var showFileImporter = false
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var editTarget: EditTarget?
@@ -20,6 +25,11 @@ struct ScanFlowView: View {
     @State private var allFilter: PageFilter = .original
     @State private var confirmLeave = false
     @State private var dropTargetID: UUID?
+
+    private enum IDSide {
+        case front
+        case back
+    }
 
     private struct EditTarget: Identifiable {
         let id: UUID
@@ -65,20 +75,21 @@ struct ScanFlowView: View {
             DocumentCameraView(
                 onFinish: { images in
                     showCamera = false
-                    let isID = idCardMode
-                    idCardMode = false
+                    if let side = idSide {
+                        idSide = nil
+                        handleIDCapture(images, side: side)
+                        return
+                    }
                     Task {
-                        if isID {
-                            await scan.addIDCard(images)
-                        } else {
-                            await scan.addScanned(images)
-                        }
+                        await scan.addScanned(images)
                         Haptics.success()
                     }
                 },
                 onCancel: {
                     showCamera = false
-                    idCardMode = false
+                    idSide = nil
+                    idFront = nil
+                    idBack = nil
                 }
             )
             .ignoresSafeArea()
@@ -116,13 +127,40 @@ struct ScanFlowView: View {
             Task { await scan.addPhotos(items) }
         }
         .alert("Scan an ID card", isPresented: $showIDCardHint) {
-            Button("Open camera") {
-                idCardMode = true
+            Button("Scan the front") {
+                idSide = .front
                 startCamera()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Scan the front of the card, then the back, then tap Save. Both sides are placed together on one page, as large as will fit.")
+            Text("Start with the front of the card. You'll be asked for the back next.")
+        }
+        .alert("Now the back", isPresented: $showIDBackPrompt) {
+            Button("Scan the back") {
+                idSide = .back
+                startCamera()
+            }
+            Button("Front only") {
+                idBack = nil
+                finishIDCard(onOnePage: true)
+            }
+            Button("Cancel", role: .cancel) {
+                idFront = nil
+            }
+        } message: {
+            Text("Turn the card over and scan the back.")
+        }
+        .confirmationDialog("How should the card go in your PDF?", isPresented: $showIDLayoutChoice, titleVisibility: .visible) {
+            Button("Both sides on one page") {
+                finishIDCard(onOnePage: true)
+            }
+            Button("Front and back on separate pages") {
+                finishIDCard(onOnePage: false)
+            }
+            Button("Cancel", role: .cancel) {
+                idFront = nil
+                idBack = nil
+            }
         }
         .alert("Camera not available", isPresented: $showCameraUnavailable) {
             Button("OK", role: .cancel) {}
@@ -387,11 +425,54 @@ struct ScanFlowView: View {
     private func startCamera() {
         Haptics.tap()
         guard VNDocumentCameraViewController.isSupported else {
-            idCardMode = false
+            idSide = nil
             showCameraUnavailable = true
             return
         }
         showCamera = true
+    }
+
+    /// After the front: ask for the back. After the back (or if both came in one go): ask how to lay them out.
+    private func handleIDCapture(_ images: [UIImage], side: IDSide) {
+        switch side {
+        case .front:
+            guard let front = images.first else { return }
+            idFront = front
+            idBack = images.count > 1 ? images[1] : nil
+            presentAfterCamera {
+                if idBack == nil {
+                    showIDBackPrompt = true
+                } else {
+                    showIDLayoutChoice = true
+                }
+            }
+        case .back:
+            idBack = images.first
+            presentAfterCamera { showIDLayoutChoice = true }
+        }
+    }
+
+    /// Lets the camera finish closing before the next dialog opens (iOS drops a dialog shown too early).
+    private func presentAfterCamera(_ show: @escaping () -> Void) {
+        Task {
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            show()
+        }
+    }
+
+    private func finishIDCard(onOnePage: Bool) {
+        guard let front = idFront else { return }
+        let back = idBack
+        idFront = nil
+        idBack = nil
+        Task {
+            if onOnePage {
+                await scan.addIDCard([front] + (back.map { [$0] } ?? []))
+            } else {
+                await scan.addScanned([front] + (back.map { [$0] } ?? []))
+            }
+            Haptics.success()
+        }
     }
 
     private func leave() {
