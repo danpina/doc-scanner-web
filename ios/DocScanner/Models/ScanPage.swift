@@ -1,11 +1,12 @@
 import UIKit
 
-/// Same five filters as the web app (public/filters.js).
+/// The web app's five filters (public/filters.js), plus `clean`, which only exists in the iPhone app.
 enum PageFilter: String, CaseIterable, Identifiable {
     case original
     case grayscale
     case bw
     case enhance
+    case clean
     case bright
 
     var id: String { rawValue }
@@ -16,6 +17,7 @@ enum PageFilter: String, CaseIterable, Identifiable {
         case .grayscale: return "Grayscale"
         case .bw: return "Black & White"
         case .enhance: return "Enhance"
+        case .clean: return "Clean"
         case .bright: return "Brighten"
         }
     }
