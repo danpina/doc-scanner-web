@@ -1,3 +1,4 @@
+import Contacts
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
@@ -17,6 +18,10 @@ struct ScanFlowView: View {
     @State private var showCamera = false
     @State private var showCameraUnavailable = false
     @State private var showIDCardHint = false
+    @State private var showBusinessCardHint = false
+    /// True while the camera is capturing a business card.
+    @State private var cardMode = false
+    @State private var contactDraft: ContactDraft?
     @State private var showIDBackPrompt = false
     @State private var showIDLayoutChoice = false
     /// Which side of an ID card the camera is capturing right now; nil for an ordinary scan.
@@ -35,6 +40,11 @@ struct ScanFlowView: View {
     private enum IDSide {
         case front
         case back
+    }
+
+    private struct ContactDraft: Identifiable {
+        let id = UUID()
+        let contact: CNMutableContact
     }
 
     private struct EditTarget: Identifiable {
@@ -81,6 +91,11 @@ struct ScanFlowView: View {
             DocumentCameraView(
                 onFinish: { images in
                     showCamera = false
+                    if cardMode {
+                        cardMode = false
+                        handleBusinessCard(images)
+                        return
+                    }
                     if let side = idSide {
                         idSide = nil
                         handleIDCapture(images, side: side)
@@ -93,6 +108,7 @@ struct ScanFlowView: View {
                 },
                 onCancel: {
                     showCamera = false
+                    cardMode = false
                     idSide = nil
                     idFront = nil
                     idBack = nil
@@ -150,6 +166,20 @@ struct ScanFlowView: View {
             loadInitialImagesOnce()
         }
         .onChange(of: inbox.pendingURLs) { _ in takeFilesFromInbox() }
+        .sheet(item: $contactDraft) { draft in
+            ContactSheet(contact: draft.contact) {
+                contactDraft = nil
+            }
+        }
+        .alert("Scan a business card", isPresented: $showBusinessCardHint) {
+            Button("Open camera") {
+                cardMode = true
+                startCamera()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Scan the card. The details are read on your iPhone and you can check them before saving the contact.")
+        }
         .alert("Scan an ID card", isPresented: $showIDCardHint) {
             Button("Scan the front") {
                 idSide = .front
@@ -257,13 +287,23 @@ struct ScanFlowView: View {
                 .buttonStyle(.pressable)
             }
 
-            Button {
-                Haptics.tap()
-                showIDCardHint = true
-            } label: {
-                secondaryTile(icon: "person.text.rectangle", title: "ID card", subtitle: "Front and back on one page")
+            HStack(spacing: 14) {
+                Button {
+                    Haptics.tap()
+                    showIDCardHint = true
+                } label: {
+                    secondaryTile(icon: "person.text.rectangle", title: "ID card", subtitle: "Front and back")
+                }
+                .buttonStyle(.pressable)
+
+                Button {
+                    Haptics.tap()
+                    showBusinessCardHint = true
+                } label: {
+                    secondaryTile(icon: "person.crop.rectangle", title: "Business card", subtitle: "Save as contact")
+                }
+                .buttonStyle(.pressable)
             }
-            .buttonStyle(.pressable)
 
             Text("Everything is processed on your device.")
                 .font(.footnote)
@@ -456,6 +496,7 @@ struct ScanFlowView: View {
         Haptics.tap()
         guard VNDocumentCameraViewController.isSupported else {
             idSide = nil
+            cardMode = false
             showCameraUnavailable = true
             return
         }
@@ -510,6 +551,21 @@ struct ScanFlowView: View {
         loadedInitialImages = true
         let images = initialImages
         Task { await scan.addScanned(images) }
+    }
+
+    /// Reads the card on the iPhone and opens Apple's new-contact screen with what it found.
+    private func handleBusinessCard(_ images: [UIImage]) {
+        guard let card = images.first else { return }
+        Task {
+            scan.isBusy = true
+            let contact = await Task.detached(priority: .userInitiated) {
+                let text = TextRecognizer.recognize(ImageProcessing.scaled(card, maxDimension: 2000))
+                return BusinessCardParser.contact(from: text)
+            }.value
+            scan.isBusy = false
+            Haptics.success()
+            contactDraft = ContactDraft(contact: contact)
+        }
     }
 
     private func takeFilesFromInbox() {

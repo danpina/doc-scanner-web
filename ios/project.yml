@@ -24,6 +24,7 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        NSContactsUsageDescription: "Doc Scanner can add the details from a business card you scan to your contacts."
         NSCameraUsageDescription: "Doc Scanner uses the camera to scan your documents."
         ITSAppUsesNonExemptEncryption: false
         # Lets "Open in…" / "Copy to Doc Scanner" appear for PDFs and images in Files, Mail, Safari, etc.
