@@ -82,6 +82,8 @@ struct ExportOptions: Equatable {
 
     var quality: OutputQuality = .best
     var layout: PageLayout = .original
+    /// Text repeated diagonally across every page, only for the file that is shared.
+    var watermark: String?
 
     /// The choices the user made last time (the export screen keeps them in UserDefaults).
     static var stored: ExportOptions {

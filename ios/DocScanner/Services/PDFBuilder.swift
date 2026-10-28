@@ -34,11 +34,46 @@ enum PDFBuilder {
                 let imageRect = placement(of: image, on: page, layout: options.layout)
                 context.beginPage(withBounds: page, pageInfo: [:])
                 compressed(image, quality: options.quality).draw(in: imageRect)
+                if let watermark = options.watermark, !watermark.isEmpty {
+                    drawWatermark(watermark, in: imageRect, context: context.cgContext)
+                }
                 if index < text.count {
                     drawInvisibleText(text[index], in: imageRect, context: context.cgContext)
                 }
             }
         }
+    }
+
+    /// The text repeated in staggered rows at a slant, light enough to read the page through.
+    private static func drawWatermark(_ text: String, in rect: CGRect, context: CGContext) {
+        context.saveGState()
+        context.clip(to: rect)
+        context.translateBy(x: rect.midX, y: rect.midY)
+        context.rotate(by: -30 * .pi / 180)
+
+        let fontSize = max(10, min(rect.width, rect.height) * 0.055)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.boldSystemFont(ofSize: fontSize),
+            .foregroundColor: UIColor(white: 0.35, alpha: 0.28)
+        ]
+        let label = text as NSString
+        let textWidth = label.size(withAttributes: attributes).width
+        let stepX = textWidth + fontSize * 3
+        let stepY = fontSize * 5
+        let reach = hypot(rect.width, rect.height)
+
+        var row = 0
+        var y = -reach
+        while y < reach {
+            var x = -reach + (row % 2 == 0 ? 0 : stepX / 2)
+            while x < reach {
+                label.draw(at: CGPoint(x: x, y: y), withAttributes: attributes)
+                x += stepX
+            }
+            y += stepY
+            row += 1
+        }
+        context.restoreGState()
     }
 
     /// Each line is laid out over the spot where it was found, stretched to the width Vision

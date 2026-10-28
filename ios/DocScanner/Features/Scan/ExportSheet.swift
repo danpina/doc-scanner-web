@@ -2,8 +2,34 @@ import PDFKit
 import SwiftUI
 
 /// What the web app's export panel does: name the PDF, pick its size and page format, then
-/// share/save-to-Files it or keep it in "My Scans" on this iPhone.
+/// share/save-to-Files it (as a PDF, or as pictures) or keep it in "My Scans" on this iPhone.
 struct ExportSheet: View {
+    private enum ShareFormat: String, CaseIterable, Identifiable {
+        case pdf = "PDF"
+        case jpg = "JPG"
+        case png = "PNG"
+
+        var id: String { rawValue }
+        var fileExtension: String { rawValue.lowercased() }
+    }
+
+    private struct ShareItems: Identifiable {
+        let id = UUID()
+        let urls: [URL]
+    }
+
+    private enum ShareError: LocalizedError {
+        case lockFailed
+        case encodeFailed
+
+        var errorDescription: String? {
+            switch self {
+            case .lockFailed: return "Couldn't lock the PDF with a password."
+            case .encodeFailed: return "Couldn't create the pictures."
+            }
+        }
+    }
+
     let source: ScanSession.BuiltPDF
     let pageCount: Int
     /// The saved scan being edited, if this export comes from reopening one.
@@ -19,8 +45,12 @@ struct ExportSheet: View {
     @State private var title: String
     @State private var usePassword = false
     @State private var password = ""
-    @State private var shareItem: IdentifiableURL?
+    @State private var shareItem: ShareItems?
     @State private var errorMessage: String?
+    @State private var format: ShareFormat = .pdf
+    @State private var isPreparingShare = false
+    @AppStorage("watermarkText") private var watermarkText = ""
+    @State private var useWatermark = false
 
     init(source: ScanSession.BuiltPDF, pageCount: Int, replacing: SavedScan? = nil, onSaved: @escaping () -> Void) {
         self.source = source
@@ -51,7 +81,7 @@ struct ExportSheet: View {
                 }
             }
             .sheet(item: $shareItem) { item in
-                ShareSheet(items: [item.url])
+                ShareSheet(items: item.urls)
             }
             .onChange(of: qualityRaw) { _ in rebuild() }
             .onChange(of: layoutRaw) { _ in rebuild() }
@@ -111,6 +141,22 @@ struct ExportSheet: View {
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 6) {
+                Text("Share as")
+                    .font(.subheadline.weight(.medium))
+                Picker("Share as", selection: $format) {
+                    ForEach(ShareFormat.allCases) { format in
+                        Text(format.rawValue).tag(format)
+                    }
+                }
+                .pickerStyle(.segmented)
+                if format != .pdf {
+                    Text("One picture per page. \"Save to My Scans\" always keeps a PDF.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
                 Text("File size")
                     .font(.subheadline.weight(.medium))
                 Picker("File size", selection: $qualityRaw) {
@@ -124,6 +170,7 @@ struct ExportSheet: View {
                     .foregroundStyle(.secondary)
             }
 
+            if format == .pdf {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Page format")
                     .font(.subheadline.weight(.medium))
@@ -152,6 +199,21 @@ struct ExportSheet: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Watermark on the shared file", isOn: $useWatermark)
+                    .font(.subheadline.weight(.medium))
+                if useWatermark {
+                    TextField("e.g. Copy for rental application only", text: $watermarkText)
+                        .textFieldStyle(.roundedBorder)
+                }
+                Text(useWatermark
+                     ? "This text is repeated across every page of the file you share, so a copy of your ID can't easily be reused for something else. The copy in My Scans stays clean."
+                     : "Stamp a line of text across every page, for example what a copy is for.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle()
@@ -163,10 +225,10 @@ struct ExportSheet: View {
                 Haptics.tap()
                 share()
             } label: {
-                Label("Share / Save to Files", systemImage: "square.and.arrow.up")
+                Label(format == .pdf ? "Share / Save to Files" : "Share pictures (\(format.rawValue))", systemImage: "square.and.arrow.up")
             }
             .buttonStyle(.primary)
-            .disabled(isRebuilding || (usePassword && password.isEmpty))
+            .disabled(isRebuilding || isPreparingShare || (format == .pdf && usePassword && password.isEmpty))
 
             Button {
                 save(asNew: replacing == nil)
@@ -241,24 +303,71 @@ struct ExportSheet: View {
 
     private func share() {
         errorMessage = nil
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("\(FileNames.safe(cleanTitle)).pdf")
-        do {
+        isPreparingShare = true
+        Task {
+            defer { isPreparingShare = false }
+            do {
+                shareItem = ShareItems(urls: try await makeShareFiles())
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// The file(s) to hand to the share sheet: one PDF (watermarked and locked if chosen), or one
+    /// picture per page.
+    private func makeShareFiles() async throws -> [URL] {
+        let folder = FileManager.default.temporaryDirectory
+        let name = FileNames.safe(cleanTitle)
+
+        switch format {
+        case .pdf:
+            var data = pdfData
+            let mark = watermarkText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if useWatermark, !mark.isEmpty {
+                var chosen = options
+                chosen.watermark = mark
+                let images = source.images
+                let texts = source.texts
+                let pdfTitle = source.suggestedTitle ?? "Scan"
+                if let stamped = await Task.detached(priority: .userInitiated, operation: {
+                    PDFBuilder.makePDF(from: images, text: texts, title: pdfTitle, options: chosen)
+                }).value {
+                    data = stamped
+                }
+            }
+
+            let url = folder.appendingPathComponent("\(name).pdf")
             if usePassword {
-                guard let document = PDFDocument(data: pdfData),
+                guard let document = PDFDocument(data: data),
                       document.write(to: url, withOptions: [
                         PDFDocumentWriteOption.userPasswordOption: password,
                         PDFDocumentWriteOption.ownerPasswordOption: password
                       ]) else {
-                    errorMessage = "Couldn't lock the PDF with a password."
-                    return
+                    throw ShareError.lockFailed
                 }
             } else {
-                try pdfData.write(to: url, options: .atomic)
+                try data.write(to: url, options: .atomic)
             }
-            shareItem = IdentifiableURL(url: url)
-        } catch {
-            errorMessage = "Couldn't prepare the file: \(error.localizedDescription)"
+            return [url]
+
+        case .jpg, .png:
+            let images = source.images
+            let quality = options.quality
+            let chosen = format
+            return try await Task.detached(priority: .userInitiated) {
+                var urls: [URL] = []
+                for (index, image) in images.enumerated() {
+                    let sized = ImageProcessing.scaled(image, maxDimension: quality.maxPixels)
+                    let encoded = chosen == .jpg ? sized.jpegData(compressionQuality: quality.jpegQuality) : sized.pngData()
+                    guard let encoded else { throw ShareError.encodeFailed }
+                    let suffix = images.count == 1 ? "" : "-\(index + 1)"
+                    let url = folder.appendingPathComponent("\(name)\(suffix).\(chosen.fileExtension)")
+                    try encoded.write(to: url, options: .atomic)
+                    urls.append(url)
+                }
+                return urls
+            }.value
         }
     }
 

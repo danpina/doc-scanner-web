@@ -1,5 +1,19 @@
 import SwiftUI
 
+/// Pen or highlighter, while the editor is in drawing mode.
+enum DrawTool {
+    case pen
+    case highlighter
+
+    var colors: [MarkColor] {
+        self == .pen ? MarkColor.forInk : MarkColor.forHighlighter
+    }
+
+    var defaultColor: MarkColor {
+        self == .pen ? .blue : .yellow
+    }
+}
+
 /// Working copy of one page's marks while the editor is open. Cancel throws it away.
 @MainActor
 final class MarkupModel: ObservableObject {
@@ -8,6 +22,12 @@ final class MarkupModel: ObservableObject {
     @Published private(set) var base: UIImage?
     @Published var marks: [PageMark]
     @Published var selectedID: UUID?
+
+    /// Non-nil while the finger draws instead of moving marks.
+    @Published private(set) var drawTool: DrawTool?
+    @Published var drawColor: MarkColor = .blue
+    /// The stroke being drawn right now, as 0...1 points across the page.
+    @Published private(set) var livePoints: [CGPoint] = []
 
     private var dragOrigin: CGPoint?
     private static let previewDimension: CGFloat = 1400
@@ -31,6 +51,10 @@ final class MarkupModel: ObservableObject {
         marks.first { $0.id == selectedID }
     }
 
+    var hasStrokes: Bool {
+        marks.contains { $0.isStroke }
+    }
+
     func add(_ mark: PageMark) {
         marks.append(mark)
         selectedID = mark.id
@@ -45,6 +69,13 @@ final class MarkupModel: ObservableObject {
         guard let index = marks.firstIndex(where: { $0.id == id }) else { return }
         let range = marks[index].sizeRange
         marks[index].size = min(max(marks[index].size * factor, range.lowerBound), range.upperBound)
+    }
+
+    /// Makes a cover box taller or shorter while keeping its width.
+    func reshapeCover(_ id: UUID, factor: CGFloat) {
+        guard let index = marks.firstIndex(where: { $0.id == id }),
+              case .cover(let aspect) = marks[index].kind else { return }
+        marks[index].kind = .cover(aspect: min(max(aspect * factor, 0.03), 3))
     }
 
     func setColor(_ id: UUID, _ color: MarkColor) {
@@ -88,6 +119,40 @@ final class MarkupModel: ObservableObject {
         dragOrigin = nil
     }
 
+    // MARK: Drawing
+
+    func startDrawing(_ tool: DrawTool) {
+        drawTool = tool
+        drawColor = tool.defaultColor
+        selectedID = nil
+        livePoints = []
+    }
+
+    func stopDrawing() {
+        finishStroke()
+        drawTool = nil
+    }
+
+    func addPoint(_ location: CGPoint, in pageSize: CGSize) {
+        guard pageSize.width > 0, pageSize.height > 0 else { return }
+        livePoints.append(CGPoint(
+            x: min(max(location.x / pageSize.width, 0), 1),
+            y: min(max(location.y / pageSize.height, 0), 1)
+        ))
+    }
+
+    func finishStroke() {
+        defer { livePoints = [] }
+        guard let tool = drawTool, !livePoints.isEmpty else { return }
+        marks.append(.stroke(points: livePoints, highlighter: tool == .highlighter, color: drawColor))
+    }
+
+    func undoStroke() {
+        if let index = marks.lastIndex(where: { $0.isStroke }) {
+            marks.remove(at: index)
+        }
+    }
+
     /// Renders the full-resolution page with the marks on it, off the main thread.
     func commit() async -> ScanPage {
         let source = page
@@ -98,8 +163,8 @@ final class MarkupModel: ObservableObject {
     }
 }
 
-/// Sign and fill in one page: place your signature, type text, add today's date or a tick,
-/// drag everything where it belongs.
+/// Sign and fill in one page: place your signature, type text, add today's date or a tick, hide
+/// something under a cover, or draw and highlight. Drag everything where it belongs.
 struct MarkupEditorView: View {
     @StateObject private var model: MarkupModel
     @State private var isSaving = false
@@ -173,6 +238,7 @@ struct MarkupEditorView: View {
             Button {
                 guard !isSaving, model.base != nil else { return }
                 Haptics.tap()
+                model.stopDrawing()
                 isSaving = true
                 Task {
                     let page = await model.commit()
@@ -200,8 +266,26 @@ struct MarkupEditorView: View {
                         .frame(width: size.width, height: size.height)
                         .onTapGesture { model.selectedID = nil }
 
-                    ForEach(model.marks) { mark in
+                    strokeLayer
+                        .frame(width: size.width, height: size.height)
+                        .allowsHitTesting(false)
+
+                    ForEach(model.marks.filter { !$0.isStroke }) { mark in
                         markView(mark, pageSize: size)
+                    }
+
+                    if model.drawTool != nil {
+                        // Catches the finger while drawing, above every mark.
+                        Color.clear
+                            .frame(width: size.width, height: size.height)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        model.addPoint(value.location, in: size)
+                                    }
+                                    .onEnded { _ in model.finishStroke() }
+                            )
                     }
                 }
                 .frame(width: size.width, height: size.height)
@@ -217,6 +301,32 @@ struct MarkupEditorView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+    }
+
+    /// Pen and highlighter strokes, drawn with the same path the saved page uses.
+    private var strokeLayer: some View {
+        Canvas { context, size in
+            for mark in model.marks {
+                guard case .stroke(let points, let highlighter) = mark.kind else { continue }
+                drawStroke(points, highlighter: highlighter, color: mark.color, width: mark.size, in: context, size: size)
+            }
+            if let tool = model.drawTool, !model.livePoints.isEmpty {
+                let highlighter = tool == .highlighter
+                drawStroke(model.livePoints, highlighter: highlighter, color: model.drawColor,
+                           width: PageMark.stroke(points: [], highlighter: highlighter, color: model.drawColor).size,
+                           in: context, size: size)
+            }
+        }
+    }
+
+    private func drawStroke(_ points: [CGPoint], highlighter: Bool, color: MarkColor, width: CGFloat, in context: GraphicsContext, size: CGSize) {
+        var layer = context
+        layer.blendMode = highlighter ? .multiply : .normal
+        layer.stroke(
+            Path(MarkRenderer.strokePath(points, in: size)),
+            with: .color(Color(color.uiColor).opacity(highlighter ? MarkRenderer.highlighterAlpha : 1)),
+            style: StrokeStyle(lineWidth: width * size.width, lineCap: highlighter ? .butt : .round, lineJoin: .round)
+        )
     }
 
     @ViewBuilder
@@ -236,6 +346,12 @@ struct MarkupEditorView: View {
                     .font(.system(size: mark.size * pageSize.width))
                     .foregroundColor(Color(mark.color.uiColor))
                     .fixedSize()
+            case .cover(let aspect):
+                Rectangle()
+                    .fill(Color(mark.color.uiColor))
+                    .frame(width: mark.size * pageSize.width, height: mark.size * pageSize.width * aspect)
+            case .stroke:
+                EmptyView()
             }
         }
         .padding(4)
@@ -258,51 +374,18 @@ struct MarkupEditorView: View {
         .onTapGesture { model.selectedID = mark.id }
     }
 
+    // MARK: Toolbar
+
+    @ViewBuilder
     private var toolbar: some View {
         VStack(spacing: 10) {
-            if let selected = model.selected {
-                colorAndAngle(for: selected)
-                HStack(spacing: 10) {
-                    toolButton("Smaller", icon: "minus.magnifyingglass") {
-                        model.resize(selected.id, factor: 1 / 1.15)
-                    }
-                    toolButton("Larger", icon: "plus.magnifyingglass") {
-                        model.resize(selected.id, factor: 1.15)
-                    }
-                    toolButton("Turn 90°", icon: "rotate.right") {
-                        model.rotateQuarterTurn(selected.id)
-                    }
-                    if selected.isSignature {
-                        toolButton("Redraw", icon: "pencil.tip") {
-                            padReplacesID = selected.id
-                            showPad = true
-                        }
-                    }
-                    toolButton("Delete", icon: "trash", tint: .red) {
-                        Haptics.warning()
-                        model.remove(selected.id)
-                    }
+            if let tool = model.drawTool {
+                drawingTools(tool)
+            } else {
+                if let selected = model.selected {
+                    selectionTools(selected)
                 }
-            }
-
-            HStack(spacing: 10) {
-                toolButton("Signature", icon: "signature") {
-                    if let saved = SignatureStore.load() {
-                        model.add(.signature(saved))
-                    } else {
-                        padReplacesID = nil
-                        showPad = true
-                    }
-                }
-                toolButton("Text", icon: "textformat") {
-                    showTextAlert = true
-                }
-                toolButton("Date", icon: "calendar") {
-                    model.add(.text(Date().formatted(date: .numeric, time: .omitted)))
-                }
-                toolButton("Tick", icon: "checkmark") {
-                    model.add(.text("✓", size: 0.05))
-                }
+                addTools
             }
         }
         .padding(.horizontal, 16)
@@ -310,22 +393,111 @@ struct MarkupEditorView: View {
         .padding(.bottom, 14)
     }
 
-    /// Pen color dots and a slider to turn the selected item to any angle.
+    /// Everything you can put on the page.
+    private var addTools: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                toolButton("Signature", icon: "signature", fixedWidth: 78) {
+                    if let saved = SignatureStore.load() {
+                        model.add(.signature(saved))
+                    } else {
+                        padReplacesID = nil
+                        showPad = true
+                    }
+                }
+                toolButton("Text", icon: "textformat", fixedWidth: 78) {
+                    showTextAlert = true
+                }
+                toolButton("Date", icon: "calendar", fixedWidth: 78) {
+                    model.add(.text(Date().formatted(date: .numeric, time: .omitted)))
+                }
+                toolButton("Tick", icon: "checkmark", fixedWidth: 78) {
+                    model.add(.text("✓", size: 0.05))
+                }
+                toolButton("Pen", icon: "pencil.tip", fixedWidth: 78) {
+                    model.startDrawing(.pen)
+                }
+                toolButton("Highlight", icon: "highlighter", fixedWidth: 78) {
+                    model.startDrawing(.highlighter)
+                }
+                toolButton("Cover", icon: "rectangle.fill", fixedWidth: 78) {
+                    model.add(.cover())
+                }
+            }
+        }
+    }
+
+    /// Color, angle, size and delete for the selected item.
+    private func selectionTools(_ selected: PageMark) -> some View {
+        VStack(spacing: 10) {
+            colorAndAngle(for: selected)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    toolButton("Smaller", icon: "minus.magnifyingglass", fixedWidth: 74) {
+                        model.resize(selected.id, factor: 1 / 1.15)
+                    }
+                    toolButton("Larger", icon: "plus.magnifyingglass", fixedWidth: 74) {
+                        model.resize(selected.id, factor: 1.15)
+                    }
+                    if selected.isCover {
+                        toolButton("Taller", icon: "arrow.up.and.down", fixedWidth: 74) {
+                            model.reshapeCover(selected.id, factor: 1.2)
+                        }
+                        toolButton("Shorter", icon: "arrow.down.and.line.horizontal.and.arrow.up", fixedWidth: 74) {
+                            model.reshapeCover(selected.id, factor: 1 / 1.2)
+                        }
+                    }
+                    toolButton("Turn 90°", icon: "rotate.right", fixedWidth: 74) {
+                        model.rotateQuarterTurn(selected.id)
+                    }
+                    if selected.isSignature {
+                        toolButton("Redraw", icon: "pencil.tip", fixedWidth: 74) {
+                            padReplacesID = selected.id
+                            showPad = true
+                        }
+                    }
+                    toolButton("Delete", icon: "trash", tint: .red, fixedWidth: 74) {
+                        Haptics.warning()
+                        model.remove(selected.id)
+                    }
+                }
+            }
+        }
+    }
+
+    /// While drawing: color dots, undo, and a way back to the other tools.
+    private func drawingTools(_ tool: DrawTool) -> some View {
+        VStack(spacing: 10) {
+            Text(tool == .pen ? "Draw on the page with your finger." : "Swipe over text to highlight it.")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.8))
+            HStack(spacing: 14) {
+                ForEach(tool.colors) { color in
+                    colorDot(color, isSelected: model.drawColor == color) {
+                        model.drawColor = color
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 10) {
+                toolButton("Undo", icon: "arrow.uturn.backward") {
+                    model.undoStroke()
+                }
+                toolButton("Done drawing", icon: "checkmark.circle") {
+                    model.stopDrawing()
+                }
+            }
+        }
+    }
+
+    /// Color dots and a slider to turn the selected item to any angle.
     private func colorAndAngle(for mark: PageMark) -> some View {
         VStack(spacing: 8) {
             HStack(spacing: 14) {
-                ForEach(MarkColor.allCases) { color in
-                    Button {
-                        Haptics.select()
+                ForEach(mark.palette) { color in
+                    colorDot(color, isSelected: mark.color == color) {
                         model.setColor(mark.id, color)
-                    } label: {
-                        Circle()
-                            .fill(Color(color.uiColor))
-                            .frame(width: 30, height: 30)
-                            .overlay(Circle().strokeBorder(Color.white, lineWidth: mark.color == color ? 3 : 1).opacity(mark.color == color ? 1 : 0.4))
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(color.label)
                 }
                 Spacer(minLength: 0)
             }
@@ -347,7 +519,25 @@ struct MarkupEditorView: View {
         }
     }
 
-    private func toolButton(_ title: String, icon: String, tint: Color = .white, action: @escaping () -> Void) -> some View {
+    private func colorDot(_ color: MarkColor, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.select()
+            action()
+        } label: {
+            Circle()
+                .fill(Color(color.uiColor))
+                .frame(width: 30, height: 30)
+                .overlay(
+                    Circle()
+                        .strokeBorder(Color.white, lineWidth: isSelected ? 3 : 1)
+                        .opacity(isSelected ? 1 : 0.4)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(color.label)
+    }
+
+    private func toolButton(_ title: String, icon: String, tint: Color = .white, fixedWidth: CGFloat? = nil, action: @escaping () -> Void) -> some View {
         Button {
             Haptics.tap()
             action()
@@ -357,9 +547,11 @@ struct MarkupEditorView: View {
                     .font(.system(size: 20, weight: .semibold))
                 Text(title)
                     .font(.caption2)
+                    .lineLimit(1)
             }
             .foregroundStyle(tint)
-            .frame(maxWidth: .infinity)
+            .frame(width: fixedWidth)
+            .frame(maxWidth: fixedWidth == nil ? .infinity : nil)
             .padding(.vertical, 8)
             .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
