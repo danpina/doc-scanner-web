@@ -8,8 +8,12 @@ struct ScanFlowView: View {
     @ObservedObject var inbox: ImportInbox
     let onClose: () -> Void
     let onSaved: () -> Void
+    /// Set when a saved scan was reopened: saving then replaces it instead of adding a new one.
+    var editing: SavedScan?
+    var initialImages: [UIImage] = []
 
     @StateObject private var scan = ScanSession()
+    @State private var loadedInitialImages = false
     @State private var showCamera = false
     @State private var showCameraUnavailable = false
     @State private var showIDCardHint = false
@@ -59,7 +63,7 @@ struct ScanFlowView: View {
                 .padding(.bottom, 24)
             }
             .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .navigationTitle("New Scan")
+            .navigationTitle(editing == nil ? "New Scan" : "Edit Scan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -124,6 +128,7 @@ struct ScanFlowView: View {
             ExportSheet(
                 source: item.pdf,
                 pageCount: scan.pages.count,
+                replacing: editing,
                 onSaved: {
                     exportItem = nil
                     onSaved()
@@ -140,7 +145,10 @@ struct ScanFlowView: View {
             photoItems = []
             Task { await scan.addPhotos(items) }
         }
-        .onAppear { takeFilesFromInbox() }
+        .onAppear {
+            takeFilesFromInbox()
+            loadInitialImagesOnce()
+        }
         .onChange(of: inbox.pendingURLs) { _ in takeFilesFromInbox() }
         .alert("Scan an ID card", isPresented: $showIDCardHint) {
             Button("Scan the front") {
@@ -495,6 +503,13 @@ struct ScanFlowView: View {
             }
             Haptics.success()
         }
+    }
+
+    private func loadInitialImagesOnce() {
+        guard !loadedInitialImages, !initialImages.isEmpty else { return }
+        loadedInitialImages = true
+        let images = initialImages
+        Task { await scan.addScanned(images) }
     }
 
     private func takeFilesFromInbox() {

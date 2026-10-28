@@ -6,6 +6,8 @@ import SwiftUI
 struct ExportSheet: View {
     let source: ScanSession.BuiltPDF
     let pageCount: Int
+    /// The saved scan being edited, if this export comes from reopening one.
+    let replacing: SavedScan?
     let onSaved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -20,12 +22,13 @@ struct ExportSheet: View {
     @State private var shareItem: IdentifiableURL?
     @State private var errorMessage: String?
 
-    init(source: ScanSession.BuiltPDF, pageCount: Int, onSaved: @escaping () -> Void) {
+    init(source: ScanSession.BuiltPDF, pageCount: Int, replacing: SavedScan? = nil, onSaved: @escaping () -> Void) {
         self.source = source
         self.pageCount = pageCount
+        self.replacing = replacing
         self.onSaved = onSaved
         _pdfData = State(initialValue: source.data)
-        _title = State(initialValue: source.suggestedTitle ?? ExportSheet.defaultTitle())
+        _title = State(initialValue: replacing?.title ?? source.suggestedTitle ?? ExportSheet.defaultTitle())
     }
 
     var body: some View {
@@ -91,7 +94,7 @@ struct ExportSheet: View {
                 .foregroundStyle(.secondary)
             TextField("Title", text: $title)
                 .font(.body)
-            if source.suggestedTitle != nil {
+            if source.suggestedTitle != nil, replacing == nil {
                 Text("Suggested from the text on the first page. Change it if you like.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -166,12 +169,22 @@ struct ExportSheet: View {
             .disabled(isRebuilding || (usePassword && password.isEmpty))
 
             Button {
-                save()
+                save(asNew: replacing == nil)
             } label: {
-                Label("Save to My Scans", systemImage: "tray.and.arrow.down")
+                Label(replacing == nil ? "Save to My Scans" : "Save changes", systemImage: "tray.and.arrow.down")
             }
             .buttonStyle(.secondary)
             .disabled(isRebuilding)
+
+            if replacing != nil {
+                Button {
+                    save(asNew: true)
+                } label: {
+                    Label("Save as a new scan", systemImage: "plus.square.on.square")
+                }
+                .buttonStyle(.secondary)
+                .disabled(isRebuilding)
+            }
 
             Text("Saved scans stay on this iPhone.")
                 .font(.footnote)
@@ -249,10 +262,14 @@ struct ExportSheet: View {
         }
     }
 
-    private func save() {
+    private func save(asNew: Bool) {
         errorMessage = nil
         do {
-            try LocalScanStore.shared.save(pdf: pdfData, title: cleanTitle, pageCount: pageCount, searchText: source.searchText)
+            if let replacing, !asNew {
+                try LocalScanStore.shared.replace(replacing, pdf: pdfData, title: cleanTitle, pageCount: pageCount, searchText: source.searchText)
+            } else {
+                try LocalScanStore.shared.save(pdf: pdfData, title: cleanTitle, pageCount: pageCount, searchText: source.searchText)
+            }
             Haptics.success()
             onSaved()
         } catch {

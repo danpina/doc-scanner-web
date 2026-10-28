@@ -10,7 +10,18 @@ struct ScansListView: View {
     @State private var viewing: IdentifiableURL?
     @State private var sharing: IdentifiableURL?
     @State private var pendingDelete: SavedScan?
+    @State private var renaming: SavedScan?
+    @State private var renameText = ""
+    @State private var editing: EditSession?
+    @State private var isLoadingEdit = false
     @State private var query = ""
+
+    /// A saved scan reopened in the editor, with its pages already read from the PDF.
+    private struct EditSession: Identifiable {
+        let id = UUID()
+        let scan: SavedScan
+        let images: [UIImage]
+    }
 
     private struct MonthSection: Identifiable {
         let id: String
@@ -56,8 +67,45 @@ struct ScansListView: View {
                 }
             )
         }
+        .fullScreenCover(item: $editing) { session in
+            ScanFlowView(
+                inbox: inbox,
+                onClose: { editing = nil },
+                onSaved: {
+                    editing = nil
+                    model.load()
+                },
+                editing: session.scan,
+                initialImages: session.images
+            )
+        }
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        .alert("Rename scan", isPresented: Binding(
+            get: { renaming != nil },
+            set: { shown in
+                if !shown { renaming = nil }
+            }
+        )) {
+            TextField("Title", text: $renameText)
+            Button("Save") {
+                if let scan = renaming {
+                    model.rename(scan, to: renameText)
+                }
+                renaming = nil
+            }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        }
+        .overlay {
+            if isLoadingEdit {
+                ZStack {
+                    Color.black.opacity(0.25).ignoresSafeArea()
+                    ProgressView("Opening…")
+                        .padding(22)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+            }
         }
         .sheet(item: $viewing) { item in
             PDFPreviewSheet(url: item.url)
@@ -198,6 +246,16 @@ struct ScansListView: View {
             } label: {
                 Label("Share", systemImage: "square.and.arrow.up")
             }
+            Button {
+                startRename(scan)
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+            Button {
+                edit(scan)
+            } label: {
+                Label("Edit pages", systemImage: "slider.horizontal.3")
+            }
             Button(role: .destructive) {
                 pendingDelete = scan
             } label: {
@@ -218,6 +276,12 @@ struct ScansListView: View {
                 Label("Share", systemImage: "square.and.arrow.up")
             }
             .tint(.blue)
+            Button {
+                startRename(scan)
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+            .tint(.orange)
         }
     }
 
@@ -314,6 +378,24 @@ struct ScansListView: View {
     private func open(_ scan: SavedScan) {
         if let url = model.exportCopy(scan) {
             viewing = IdentifiableURL(url: url)
+        }
+    }
+
+    private func startRename(_ scan: SavedScan) {
+        renameText = scan.title
+        renaming = scan
+    }
+
+    private func edit(_ scan: SavedScan) {
+        isLoadingEdit = true
+        Task {
+            let images = await model.pageImages(for: scan)
+            isLoadingEdit = false
+            if images.isEmpty {
+                model.errorMessage = "Couldn't read the pages of this scan."
+            } else {
+                editing = EditSession(scan: scan, images: images)
+            }
         }
     }
 

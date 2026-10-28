@@ -67,6 +67,28 @@ final class LocalScanStore {
         return scan
     }
 
+    func rename(_ scan: SavedScan, to title: String) throws {
+        let all = loadAll().map { entry -> SavedScan in
+            var copy = entry
+            if entry.id == scan.id { copy.title = title }
+            return copy
+        }
+        try writeIndex(all)
+    }
+
+    /// Overwrites a scan's PDF and details after it was edited, keeping its id and date.
+    @discardableResult
+    func replace(_ scan: SavedScan, pdf: Data, title: String, pageCount: Int, searchText: String?) throws -> SavedScan {
+        var updated = scan
+        updated.title = title
+        updated.pageCount = pageCount
+        updated.pdfSize = pdf.count
+        updated.searchText = searchText
+        try pdf.write(to: pdfURL(for: scan), options: .atomic)
+        try writeIndex(loadAll().map { $0.id == scan.id ? updated : $0 })
+        return updated
+    }
+
     func delete(_ scan: SavedScan) throws {
         try writeIndex(loadAll().filter { $0.id != scan.id })
         try? fileManager.removeItem(at: pdfURL(for: scan))

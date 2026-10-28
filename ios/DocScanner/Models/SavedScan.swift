@@ -4,8 +4,8 @@ import Foundation
 struct SavedScan: Codable, Identifiable, Equatable {
     let id: String
     var title: String
-    let pageCount: Int
-    let pdfSize: Int
+    var pageCount: Int
+    var pdfSize: Int
     let createdAt: Date
     /// The words found on the pages, for searching. Nil for scans saved before text recognition
     /// existed or with it turned off.

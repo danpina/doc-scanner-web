@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import UIKit
 
 @MainActor
 final class ScansViewModel: ObservableObject {
@@ -17,6 +18,25 @@ final class ScansViewModel: ObservableObject {
         } catch {
             errorMessage = "Couldn't delete the scan: \(error.localizedDescription)"
         }
+    }
+
+    func rename(_ scan: SavedScan, to title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != scan.title else { return }
+        do {
+            try LocalScanStore.shared.rename(scan, to: trimmed)
+            load()
+        } catch {
+            errorMessage = "Couldn't rename the scan: \(error.localizedDescription)"
+        }
+    }
+
+    /// The pages of a saved scan as images, so it can be opened in the editor again.
+    func pageImages(for scan: SavedScan) async -> [UIImage] {
+        let url = LocalScanStore.shared.pdfURL(for: scan)
+        return await Task.detached(priority: .userInitiated) {
+            PDFImporter.pageImages(from: url)
+        }.value
     }
 
     /// A copy named after the scan's title, for viewing or sharing (the stored file is named
