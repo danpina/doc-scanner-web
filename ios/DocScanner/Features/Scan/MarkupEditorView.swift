@@ -47,6 +47,24 @@ final class MarkupModel: ObservableObject {
         marks[index].size = min(max(marks[index].size * factor, range.lowerBound), range.upperBound)
     }
 
+    func setColor(_ id: UUID, _ color: MarkColor) {
+        guard let index = marks.firstIndex(where: { $0.id == id }) else { return }
+        marks[index].color = color
+    }
+
+    /// Snaps to upright when the slider is close to it, so 0° is easy to hit.
+    func setRotation(_ id: UUID, degrees: Double) {
+        guard let index = marks.firstIndex(where: { $0.id == id }) else { return }
+        marks[index].rotation = abs(degrees) < 3 ? 0 : degrees
+    }
+
+    func rotateQuarterTurn(_ id: UUID) {
+        guard let index = marks.firstIndex(where: { $0.id == id }) else { return }
+        var turned = marks[index].rotation + 90
+        if turned > 180 { turned -= 360 }
+        marks[index].rotation = turned
+    }
+
     func replaceSignature(_ id: UUID, with image: UIImage) {
         guard let index = marks.firstIndex(where: { $0.id == id }) else { return }
         marks[index].kind = .signature(image)
@@ -187,6 +205,7 @@ struct MarkupEditorView: View {
                     }
                 }
                 .frame(width: size.width, height: size.height)
+                .coordinateSpace(name: "page")
                 .clipped()
                 .shadow(color: .black.opacity(0.4), radius: 10)
                 .frame(width: proxy.size.width, height: proxy.size.height)
@@ -207,13 +226,15 @@ struct MarkupEditorView: View {
             switch mark.kind {
             case .signature(let image):
                 Image(uiImage: image)
+                    .renderingMode(.template)
                     .resizable()
                     .scaledToFit()
+                    .foregroundColor(Color(mark.color.uiColor))
                     .frame(width: mark.size * pageSize.width)
             case .text(let string):
                 Text(string)
                     .font(.system(size: mark.size * pageSize.width))
-                    .foregroundColor(Color(MarkRenderer.textColor))
+                    .foregroundColor(Color(mark.color.uiColor))
                     .fixedSize()
             }
         }
@@ -224,9 +245,11 @@ struct MarkupEditorView: View {
                 .opacity(selected ? 1 : 0)
         )
         .contentShape(Rectangle())
+        .rotationEffect(.degrees(mark.rotation))
         .position(x: mark.center.x * pageSize.width, y: mark.center.y * pageSize.height)
         .gesture(
-            DragGesture()
+            // Measured in the page's space, so a turned mark still follows the finger.
+            DragGesture(coordinateSpace: .named("page"))
                 .onChanged { value in
                     model.drag(mark.id, by: value.translation, in: pageSize)
                 }
@@ -238,12 +261,16 @@ struct MarkupEditorView: View {
     private var toolbar: some View {
         VStack(spacing: 10) {
             if let selected = model.selected {
+                colorAndAngle(for: selected)
                 HStack(spacing: 10) {
                     toolButton("Smaller", icon: "minus.magnifyingglass") {
                         model.resize(selected.id, factor: 1 / 1.15)
                     }
                     toolButton("Larger", icon: "plus.magnifyingglass") {
                         model.resize(selected.id, factor: 1.15)
+                    }
+                    toolButton("Turn 90°", icon: "rotate.right") {
+                        model.rotateQuarterTurn(selected.id)
                     }
                     if selected.isSignature {
                         toolButton("Redraw", icon: "pencil.tip") {
@@ -281,6 +308,43 @@ struct MarkupEditorView: View {
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 14)
+    }
+
+    /// Pen color dots and a slider to turn the selected item to any angle.
+    private func colorAndAngle(for mark: PageMark) -> some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 14) {
+                ForEach(MarkColor.allCases) { color in
+                    Button {
+                        Haptics.select()
+                        model.setColor(mark.id, color)
+                    } label: {
+                        Circle()
+                            .fill(Color(color.uiColor))
+                            .frame(width: 30, height: 30)
+                            .overlay(Circle().strokeBorder(Color.white, lineWidth: mark.color == color ? 3 : 1).opacity(mark.color == color ? 1 : 0.4))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(color.label)
+                }
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 10) {
+                Image(systemName: "rotate.right")
+                    .font(.footnote)
+                Slider(
+                    value: Binding(
+                        get: { mark.rotation },
+                        set: { model.setRotation(mark.id, degrees: $0) }
+                    ),
+                    in: -180...180,
+                    step: 1
+                )
+                Text("\(Int(mark.rotation))°")
+                    .font(.footnote.monospacedDigit())
+                    .frame(width: 44, alignment: .trailing)
+            }
+        }
     }
 
     private func toolButton(_ title: String, icon: String, tint: Color = .white, action: @escaping () -> Void) -> some View {

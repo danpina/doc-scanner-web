@@ -2,10 +2,6 @@ import UIKit
 
 /// Burns signatures and typed text into a page image. Pure image work, safe off the main thread.
 enum MarkRenderer {
-    /// Ink colors: typed text is near-black, a signature is blue-black like a pen.
-    static let textColor = UIColor(white: 0.08, alpha: 1)
-    static let inkColor = UIColor(red: 0.05, green: 0.1, blue: 0.4, alpha: 1)
-
     /// Expects a scale-1 image (everything in `ScanPage` is).
     static func draw(_ marks: [PageMark], on image: UIImage) -> UIImage {
         guard !marks.isEmpty else { return image }
@@ -15,35 +11,43 @@ enum MarkRenderer {
         format.opaque = true
         let size = image.size
 
-        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
             image.draw(at: .zero)
             for mark in marks {
-                draw(mark, pageSize: size)
+                draw(mark, pageSize: size, in: context.cgContext)
             }
         }
     }
 
-    private static func draw(_ mark: PageMark, pageSize: CGSize) {
-        let centerX = mark.center.x * pageSize.width
-        let centerY = mark.center.y * pageSize.height
+    /// Each mark is drawn around its own center, so rotating it turns it in place.
+    private static func draw(_ mark: PageMark, pageSize: CGSize, in context: CGContext) {
+        context.saveGState()
+        context.translateBy(x: mark.center.x * pageSize.width, y: mark.center.y * pageSize.height)
+        context.rotate(by: CGFloat(mark.rotation) * .pi / 180)
 
         switch mark.kind {
         case .signature(let image):
-            guard image.size.width > 0 else { return }
-            let width = mark.size * pageSize.width
-            let height = width * image.size.height / image.size.width
-            image.draw(in: CGRect(x: centerX - width / 2, y: centerY - height / 2, width: width, height: height))
+            if image.size.width > 0 {
+                let width = mark.size * pageSize.width
+                let height = width * image.size.height / image.size.width
+                // The signature is stored as a shape; the pen color is applied here.
+                let tinted = image
+                    .withRenderingMode(.alwaysTemplate)
+                    .withTintColor(mark.color.uiColor, renderingMode: .alwaysOriginal)
+                tinted.draw(in: CGRect(x: -width / 2, y: -height / 2, width: width, height: height))
+            }
 
         case .text(let string):
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: UIFont.systemFont(ofSize: mark.size * pageSize.width),
-                .foregroundColor: textColor
+                .foregroundColor: mark.color.uiColor
             ]
             let textSize = (string as NSString).size(withAttributes: attributes)
             (string as NSString).draw(
-                at: CGPoint(x: centerX - textSize.width / 2, y: centerY - textSize.height / 2),
+                at: CGPoint(x: -textSize.width / 2, y: -textSize.height / 2),
                 withAttributes: attributes
             )
         }
+        context.restoreGState()
     }
 }

@@ -386,6 +386,11 @@ struct ScanFlowView: View {
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: scan.pages.map { $0.id })
 
+            Label("Tap Sign on a page to add your signature, text or today's date.", systemImage: "signature")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
             if scan.pages.count > 1 {
                 Text("To change the order, touch and hold a page, then drag it onto another one.")
                     .font(.footnote)
@@ -556,13 +561,14 @@ private struct PageThumb: View {
                 }
                 .overlay(alignment: .topTrailing) {
                     Button(action: onMarkup) {
-                        Image(systemName: "signature")
-                            .font(.system(size: 13, weight: .semibold))
+                        Label("Sign", systemImage: "signature")
+                            .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(page.marks.isEmpty ? Theme.blueDeep : Color.white)
-                            .frame(width: 28, height: 28)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
                             .background(
                                 page.marks.isEmpty ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(Theme.brandGradient),
-                                in: Circle()
+                                in: Capsule()
                             )
                     }
                     .buttonStyle(.borderless)
