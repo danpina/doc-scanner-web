@@ -434,7 +434,7 @@ struct ScanFlowView: View {
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: scan.pages.map { $0.id })
 
-            Label("Tap Sign on a page to add your signature, text or today's date.", systemImage: "signature")
+            Label("Tap Edit on a page to sign it, write on it, draw, highlight or cover something.", systemImage: "pencil.and.scribble")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -632,18 +632,18 @@ private struct PageThumb: View {
                 }
                 .overlay(alignment: .topTrailing) {
                     Button(action: onMarkup) {
-                        Label("Sign", systemImage: "signature")
-                            .font(.system(size: 13, weight: .bold))
+                        Label("Edit", systemImage: "pencil.and.scribble")
+                            .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(page.marks.isEmpty ? Theme.blueDeep : Color.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
                             .background(
                                 page.marks.isEmpty ? AnyShapeStyle(Theme.amber) : AnyShapeStyle(Theme.brandGradient),
                                 in: Capsule()
                             )
                     }
                     .buttonStyle(.borderless)
-                    .accessibilityLabel("Sign and fill in")
+                    .accessibilityLabel("Edit page: sign, write, draw or cover")
                     .padding(6)
                 }
                 .contentShape(Rectangle())

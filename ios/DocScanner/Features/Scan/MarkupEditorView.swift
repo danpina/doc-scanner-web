@@ -232,7 +232,7 @@ struct MarkupEditorView: View {
             Button("Cancel") { onCancel() }
                 .foregroundStyle(Color.white.opacity(0.85))
             Spacer()
-            Text("Sign & fill in")
+            Text("Edit page")
                 .font(.headline)
             Spacer()
             Button {
