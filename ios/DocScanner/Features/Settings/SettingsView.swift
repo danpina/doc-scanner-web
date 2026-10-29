@@ -43,8 +43,14 @@ struct SettingsView: View {
                     Link(destination: AppLinks.privacy) {
                         Label("Privacy Policy", systemImage: "hand.raised")
                     }
+                    Link(destination: AppLinks.terms) {
+                        Label("Terms of Use", systemImage: "doc.text")
+                    }
                     Link(destination: AppLinks.support) {
                         Label("Support", systemImage: "questionmark.circle")
+                    }
+                    Link(destination: AppLinks.licenses) {
+                        Label("Open-source notices", systemImage: "chevron.left.forwardslash.chevron.right")
                     }
                     HStack {
                         Label("Version", systemImage: "info.circle")
