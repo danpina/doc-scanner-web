@@ -1,7 +1,7 @@
 // Sends the contact form through Web3Forms (https://web3forms.com), which e-mails it to the
 // site owner, so no e-mail address appears on this website. The access key below is meant to be
 // public: it only lets this form deliver messages to the owner's inbox.
-const ACCESS_KEY = 'REPLACE_WITH_WEB3FORMS_ACCESS_KEY';
+const ACCESS_KEY = '0a853e32-4576-41bb-bc07-f2a448d150fa';
 const ENDPOINT = 'https://api.web3forms.com/submit';
 
 const form = document.getElementById('contact-form');
