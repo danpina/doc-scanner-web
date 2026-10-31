@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Contact — Doc Scanner</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .doc { max-width: 720px; margin: 0 auto; padding: 1.5rem 1rem 3rem; line-height: 1.55; }
+    .contact-form { display: flex; flex-direction: column; gap: 0.9rem; background: #fff; padding: 1.25rem; border-radius: 12px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
+    .contact-form label { font-size: 0.85rem; font-weight: 600; display: flex; flex-direction: column; gap: 0.3rem; }
+    .contact-form input, .contact-form select, .contact-form textarea { padding: 0.65rem; border: 1px solid #d6d6da; border-radius: 8px; font: inherit; font-weight: 400; }
+    .contact-form textarea { min-height: 9rem; resize: vertical; }
+    .contact-form button { padding: 0.75rem; border: none; border-radius: 8px; background: #0a6bff; color: #fff; font-weight: 600; font-size: 1rem; }
+    .contact-form button:disabled { opacity: 0.6; }
+    .contact-form .trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+    .form-note { font-size: 0.85rem; color: #6b6b70; margin: 0; }
+    .form-result { margin: 0; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <main class="doc">
+    <h1>Contact</h1>
+    <p class="muted">Questions, problems, ideas, or a request about your data.</p>
+
+    <p>Write to me with this form and I'll answer as soon as I can. Many questions are answered on the <a href="support.html">Support page</a>.</p>
+
+    <form id="contact-form" class="contact-form" novalidate>
+      <label>What is it about?
+        <select name="topic">
+          <option>A question</option>
+          <option>A problem with the app</option>
+          <option>An idea or request</option>
+          <option>Privacy or data request</option>
+          <option>Something else</option>
+        </select>
+      </label>
+
+      <label>Your name (optional)
+        <input type="text" name="name" autocomplete="name" maxlength="100" />
+      </label>
+
+      <label>Your e-mail address (so I can reply)
+        <input type="email" name="email" autocomplete="email" maxlength="200" required />
+      </label>
+
+      <label>Message
+        <textarea name="message" maxlength="4000" required></textarea>
+      </label>
+
+      <!-- Hidden from people; automated spam tools tend to fill it in. -->
+      <div class="trap" aria-hidden="true">
+        <label>Leave this empty <input type="text" name="website" tabindex="-1" autocomplete="off" /></label>
+      </div>
+
+      <p class="form-note">Please don't send scans or documents with sensitive details. When you send this form, your message and e-mail address are passed through the form service Web3Forms to me, and I use them only to answer you. See the <a href="privacy.html">Privacy Policy</a>.</p>
+
+      <button type="submit" id="send-button">Send message</button>
+      <p id="form-result" class="form-result" role="status" aria-live="polite"></p>
+    </form>
+
+    <p class="muted"><a href="index.html">Back to Doc Scanner</a> · <a href="support.html">Support</a> · <a href="privacy.html">Privacy Policy</a> · <a href="terms.html">Terms of Use</a></p>
+  </main>
+  <script src="contact.js"></script>
+</body>
+</html>

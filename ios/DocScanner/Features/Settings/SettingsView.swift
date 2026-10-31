@@ -49,6 +49,9 @@ struct SettingsView: View {
                     Link(destination: AppLinks.support) {
                         Label("Support", systemImage: "questionmark.circle")
                     }
+                    Link(destination: AppLinks.contact) {
+                        Label("Contact us", systemImage: "bubble.left.and.bubble.right")
+                    }
                     Link(destination: AppLinks.licenses) {
                         Label("Open-source notices", systemImage: "chevron.left.forwardslash.chevron.right")
                     }
