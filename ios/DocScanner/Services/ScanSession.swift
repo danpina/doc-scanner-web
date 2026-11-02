@@ -43,49 +43,46 @@ final class ScanSession: ObservableObject {
         pages.append(contentsOf: await makePages(from: images))
     }
 
-    /// Every page of one or more existing PDFs.
-    func addPDFs(_ urls: [URL]) async {
-        guard !urls.isEmpty else { return }
-        isBusy = true
-        defer { isBusy = false }
-
-        var images: [UIImage] = []
-        for url in urls {
-            let scoped = url.startAccessingSecurityScopedResource()
-            images.append(contentsOf: PDFImporter.pageImages(from: url))
-            if scoped { url.stopAccessingSecurityScopedResource() }
-        }
-        guard !images.isEmpty else {
-            errorMessage = "No pages could be read from that PDF."
-            return
-        }
-        pages.append(contentsOf: await makePages(from: images))
-    }
-
-    /// PDFs and images handed over by another app. Copies iOS placed in this app's Inbox folder
-    /// are deleted once read.
+    /// PDFs, pictures, text, RTF, web pages and Word documents, from the Files picker or handed
+    /// over by another app. Copies iOS placed in this app's Inbox folder are deleted once read.
     func addFiles(_ urls: [URL]) async {
         guard !urls.isEmpty else { return }
         isBusy = true
         defer { isBusy = false }
 
         var images: [UIImage] = []
+        var skipped: [String] = []
         for url in urls {
             let scoped = url.startAccessingSecurityScopedResource()
-            if url.pathExtension.lowercased() == "pdf" {
+            let before = images.count
+            let kind = DocumentImporter.kind(of: url)
+            switch kind {
+            case .pdf:
                 images.append(contentsOf: PDFImporter.pageImages(from: url))
-            } else if let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
-                images.append(image)
+            case .image:
+                if let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
+                    images.append(image)
+                }
+            case .plainText, .rtf, .html, .docx:
+                if let text = DocumentImporter.attributedText(from: url, kind: kind) {
+                    images.append(contentsOf: await Task.detached(priority: .userInitiated) {
+                        DocumentImporter.pageImages(from: text)
+                    }.value)
+                }
+            case .unsupported:
+                break
             }
             if scoped { url.stopAccessingSecurityScopedResource() }
             if url.path.contains("/Inbox/") {
                 try? FileManager.default.removeItem(at: url)
             }
+            if images.count == before { skipped.append(url.lastPathComponent) }
         }
-        guard !images.isEmpty else {
-            errorMessage = "Couldn't read that file. Doc Scanner opens PDFs and images."
-            return
+
+        if !skipped.isEmpty {
+            errorMessage = "Couldn't read \(skipped.joined(separator: ", ")). Doc Scanner opens PDFs, pictures, text, RTF, web pages and Word (.docx) files. For anything else, save it as a PDF first."
         }
+        guard !images.isEmpty else { return }
         pages.append(contentsOf: await makePages(from: images))
         Haptics.success()
     }

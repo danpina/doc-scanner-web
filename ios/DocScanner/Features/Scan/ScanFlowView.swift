@@ -151,9 +151,9 @@ struct ScanFlowView: View {
                 }
             )
         }
-        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.pdf], allowsMultipleSelection: true) { result in
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: DocumentImporter.pickerTypes, allowsMultipleSelection: true) { result in
             if case .success(let urls) = result {
-                Task { await scan.addPDFs(urls) }
+                Task { await scan.addFiles(urls) }
             }
         }
         .onChange(of: photoItems) { items in
@@ -282,7 +282,7 @@ struct ScanFlowView: View {
                     Haptics.tap()
                     showFileImporter = true
                 } label: {
-                    secondaryTile(icon: "doc.richtext", title: "PDF", subtitle: "Import its pages")
+                    secondaryTile(icon: "doc.richtext", title: "Files", subtitle: "PDF, Word, text")
                 }
                 .buttonStyle(.pressable)
             }
@@ -352,7 +352,7 @@ struct ScanFlowView: View {
                 Haptics.tap()
                 showFileImporter = true
             } label: {
-                Label("PDF", systemImage: "doc.richtext")
+                Label("Files", systemImage: "doc.richtext")
             }
             .buttonStyle(.secondary)
         }
