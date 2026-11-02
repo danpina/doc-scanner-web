@@ -52,6 +52,7 @@ targets:
             LSHandlerRank: Alternate
             LSItemContentTypes:
               - org.openxmlformats.wordprocessingml.document
+              - com.microsoft.word.doc
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.danipina.docscanner

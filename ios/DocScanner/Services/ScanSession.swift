@@ -63,7 +63,7 @@ final class ScanSession: ObservableObject {
                 if let data = try? Data(contentsOf: url), let image = UIImage(data: data) {
                     images.append(image)
                 }
-            case .plainText, .rtf, .html, .docx:
+            case .plainText, .rtf, .html, .docx, .doc:
                 if let text = DocumentImporter.attributedText(from: url, kind: kind) {
                     images.append(contentsOf: await Task.detached(priority: .userInitiated) {
                         DocumentImporter.pageImages(from: text)
@@ -80,7 +80,7 @@ final class ScanSession: ObservableObject {
         }
 
         if !skipped.isEmpty {
-            errorMessage = "Couldn't read \(skipped.joined(separator: ", ")). Doc Scanner opens PDFs, pictures, text, RTF, web pages and Word (.docx) files. For anything else, save it as a PDF first."
+            errorMessage = "Couldn't read \(skipped.joined(separator: ", ")). Doc Scanner opens PDFs, pictures, text, RTF, web pages and Word (.doc and .docx) files. For anything else, such as Pages, Excel or PowerPoint, save it as a PDF first. Password-protected files can't be read either."
         }
         guard !images.isEmpty else { return }
         pages.append(contentsOf: await makePages(from: images))

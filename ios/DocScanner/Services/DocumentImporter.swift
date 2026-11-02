@@ -12,15 +12,13 @@ enum DocumentImporter {
         case rtf
         case html
         case docx
+        case doc
         case unsupported
     }
 
-    /// What the Files picker offers besides PDFs and images.
-    static var pickerTypes: [UTType] {
-        var types: [UTType] = [.pdf, .image, .text]
-        if let docx = UTType("org.openxmlformats.wordprocessingml.document") { types.append(docx) }
-        return types
-    }
+    /// The Files picker shows every file, so nothing seems to be missing; files that can't be
+    /// read get an explanation instead of silently staying out of the list.
+    static let pickerTypes: [UTType] = [.item]
 
     static func kind(of url: URL) -> Kind {
         switch url.pathExtension.lowercased() {
@@ -36,6 +34,8 @@ enum DocumentImporter {
             return .html
         case "docx":
             return .docx
+        case "doc":
+            return .doc
         default:
             if let type = UTType(filenameExtension: url.pathExtension) {
                 if type.conforms(to: .image) { return .image }
@@ -77,6 +77,15 @@ enum DocumentImporter {
         case .docx:
             guard let data = try? Data(contentsOf: url) else { return nil }
             return DocxReader.attributedText(from: data)
+        case .doc:
+            guard let data = try? Data(contentsOf: url), let string = DocReader.text(from: data) else { return nil }
+            let style = NSMutableParagraphStyle()
+            style.lineSpacing = 2
+            style.paragraphSpacing = 6
+            return NSAttributedString(
+                string: string,
+                attributes: [.font: UIFont.systemFont(ofSize: 11), .foregroundColor: UIColor.black, .paragraphStyle: style]
+            )
         case .pdf, .image, .unsupported:
             return nil
         }
